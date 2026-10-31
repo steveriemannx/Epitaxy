@@ -1,0 +1,5 @@
+main: () = {
+    inner: type = {
+        x: i32 = 0;
+    }
+}

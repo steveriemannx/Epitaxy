@@ -1,0 +1,48 @@
+#include <iostream>
+#include <vector>
+
+main: () = {
+    v: std::vector = (10, 20, 30);
+    for v do (e) {
+        std::cout << e << " ";
+    }
+    std::cout << "\n";
+
+    total := 0;
+    for 1 ..< 6 do (i) {
+        total += i;
+    }
+    std::cout << "half-open: (total)$\n";
+
+    for (0, 1, 2) do (e) {
+        std::cout << "tuple(e)$";
+    }
+    std::cout << "\n";
+
+    i := 0;
+    while i < 3 next i++ {
+        std::cout << "w(i)$";
+    }
+    std::cout << "\n";
+
+    j := 3;
+    do {
+        std::cout << "d(j)$";
+    }
+    next j--
+    while j > 1;
+    std::cout << "\n";
+
+    sum := 0;
+    loops := 0;
+    outer: while sum < 20 next sum += 1 {
+        if sum == 3 {
+            continue outer;
+        }
+        if sum == 10 {
+            break outer;
+        }
+        loops += 1;
+    }
+    std::cout << "sum=(sum)$ loops=(loops)$\n";
+}

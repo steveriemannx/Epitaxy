@@ -1,0 +1,6 @@
+point(1, 2)
+point(11, 22)
+point(11, 22)
+sum: 33
+plain: 3, 4
+copy: 9

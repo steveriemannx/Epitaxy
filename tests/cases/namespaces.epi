@@ -1,0 +1,32 @@
+#include <iostream>
+#include <chrono>
+
+geometry: namespace = {
+    point: type = {
+        public x: i32 = 0;
+        public y: i32 = 0;
+        sum: (this) -> i32 = x + y;
+    }
+
+    origin: (x: i32, y: i32) -> point = {
+        p: point = ();
+        p.x = x;
+        p.y = y;
+        return p;
+    }
+}
+
+chr: namespace == std::chrono;
+
+main: () = {
+    p := geometry::origin(3, 4);
+    std::cout << "sum=(p.sum())$\n";
+
+    t := chr::milliseconds(5);
+    std::cout << "ms=(t.count())$\n";
+
+    using geometry::point;
+    q: point = ();
+    q.x = 9;
+    std::cout << "using q.x=(q.x)$\n";
+}

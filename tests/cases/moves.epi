@@ -1,0 +1,19 @@
+#include <iostream>
+#include <memory>
+
+consume: (move p: std::unique_ptr<i32>) -> i32 = {
+    return p*;
+}
+
+make_value: (n: i32) -> std::unique_ptr<i32> = {
+    p := new<i32>(n);
+    return p;
+}
+
+main: () = {
+    a := make_value(7);
+    std::cout << "a=(a*)$\n";
+
+    b := make_value(8);
+    std::cout << "b=(consume(move b))$\n";
+}

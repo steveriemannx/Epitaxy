@@ -1,0 +1,20 @@
+#include <iostream>
+#include <vector>
+
+main: () = {
+    a := 10;
+    b := 3;
+    std::cout << "div=(a / b)$ mod=(a % b)$\n";
+
+    big := 1000;
+    small := unchecked_narrow<i16>(big);
+    std::cout << "small=(small)$\n";
+
+    v: std::vector = (1, 2, 3);
+    std::cout << "checked=(v[1])$\n";
+    std::cout << "unchecked=(unchecked_subscript(v, 2))$\n";
+
+    ptr: *i32 = a&;
+    std::cout << "deref=(unchecked_dereference(ptr))$\n";
+    std::cout << "cmp=(unchecked_cmp_less(1, 2))$\n";
+}

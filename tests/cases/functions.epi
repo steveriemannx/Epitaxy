@@ -1,0 +1,29 @@
+#include <iostream>
+
+add: (a: i32, b: i32) -> i32 = a + b;
+
+square: (i: i32) -> _ == i * i;
+
+increment: (inout x: i32) = { x++; }
+
+sum_to: (n: i32) -> i32 = {
+    total := 0;
+    for 1 ..= n do (i) {
+        total += i;
+    }
+    return total;
+}
+
+is_even: (n: i32) -> bool = n % 2 == 0;
+
+main: () = {
+    std::cout << add(2, 3) << "\n";
+    std::cout << square(7) << "\n";
+    x := 41;
+    increment(x);
+    std::cout << x << "\n";
+    std::cout << sum_to(100) << "\n";
+    if is_even(42) {
+        std::cout << "even\n";
+    }
+}

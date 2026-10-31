@@ -1,0 +1,11 @@
+// The smallest interesting Epitaxy program.
+#include <iostream>
+
+main: () = {
+    greet("world");
+    greet("Epitaxy");
+}
+
+greet: (name: std::string_view) = {
+    std::cout << "Hello, (name)$!\n";
+}

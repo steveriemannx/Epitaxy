@@ -1,0 +1,40 @@
+// Interfaces, virtual dispatch and smart pointers.
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <string>
+
+shape: @interface type = {
+    area: (this) -> double;
+    name: (this) -> std::string;
+}
+
+circle: type = {
+    this: shape;
+    radius: double = 1.0;
+
+    operator=: (out this, r: double) = { radius = r; }
+
+    area: (override this) -> double = 3.14159265 * radius * radius;
+    name: (override this) -> std::string = "circle";
+}
+
+square: type = {
+    this: shape;
+    side: double = 1.0;
+
+    operator=: (out this, s: double) = { side = s; }
+
+    area: (override this) -> double = side * side;
+    name: (override this) -> std::string = "square";
+}
+
+main: () = {
+    shapes: std::vector<std::shared_ptr<shape>> = ();
+    _ = shapes.emplace_back(shared.new<circle>(2.0));
+    _ = shapes.emplace_back(shared.new<square>(3.0));
+
+    for shapes do (s) {
+        std::cout << s*.name() << " with area " << (s*.area())$ << "\n";
+    }
+}

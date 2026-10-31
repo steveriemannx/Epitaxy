@@ -1,0 +1,6 @@
+flags: @flag_enum type = {
+    a;
+    b;
+}
+
+main: () = { }

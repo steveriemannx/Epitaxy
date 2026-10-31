@@ -1,0 +1,11 @@
+#include <iostream>
+#include <string>
+
+main: () = {
+    x := 42;
+    std::cout << "dec=(x)$, hex=(x:#x)$, oct=(x:#o)$, pad=(x:08d)$\n";
+    f := 3.14159;
+    std::cout << "f2=(f:.2f)$, f4=(f:>10.4f)$\n";
+    s := "hi";
+    std::cout << "str=[(s:>6)$]\n";
+}

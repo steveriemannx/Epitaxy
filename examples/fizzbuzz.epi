@@ -1,0 +1,23 @@
+// FizzBuzz, written with ranges, inspect and string interpolation.
+#include <iostream>
+
+describe: (n: i32) -> std::string = {
+    divisible_by_3 := n % 3 == 0;
+    divisible_by_5 := n % 5 == 0;
+    if divisible_by_3 && divisible_by_5 {
+        return "FizzBuzz";
+    }
+    else if divisible_by_3 {
+        return "Fizz";
+    }
+    else if divisible_by_5 {
+        return "Buzz";
+    }
+    return "(n)$";
+}
+
+main: () = {
+    for 1 ..= 20 do (n) {
+        std::cout << describe(n) << "\n";
+    }
+}

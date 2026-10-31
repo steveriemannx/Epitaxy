@@ -1,0 +1,12 @@
+// A line comment: the rest of the line is ignored.
+
+/*
+   A stream comment: everything until the closing delimiter.
+   Stream comments do not nest.
+*/
+
+main: () = {
+    // comments inside bodies
+    x := 1;   // trailing comment
+    /* inline */ std::cout << "comments ok (x)$\n";
+}

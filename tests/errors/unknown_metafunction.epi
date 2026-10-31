@@ -1,0 +1,5 @@
+thing: @frobnicate type = {
+    x: i32 = 0;
+}
+
+main: () = { }

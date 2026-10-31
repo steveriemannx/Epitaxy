@@ -1,0 +1,45 @@
+#include <iostream>
+
+color: @enum type = {
+    red;
+    green;
+    blue;
+}
+
+skat_game: @enum<i16> type = {
+    diamonds := 9;
+    hearts;
+    spades;
+    clubs;
+    grand := 20;
+    null_game := 23;
+}
+
+janus: @enum type = {
+    past;
+    future;
+
+    flip: (inout this) = {
+        if this == past {
+            this = future;
+        }
+        else {
+            this = past;
+        }
+    }
+}
+
+main: () = {
+    c: color = ();
+    c = color::green;
+    std::cout << "color: (c)$\n";
+    if c == color::green {
+        std::cout << "green\n";
+    }
+    std::cout << "game: (skat_game::hearts)$, (skat_game::clubs)$\n";
+
+    j: janus = ();
+    std::cout << "janus: (j)$\n";
+    j.flip();
+    std::cout << "janus: (j)$\n";
+}

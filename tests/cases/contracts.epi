@@ -1,0 +1,35 @@
+#include <iostream>
+
+increment: (inout x: i32)
+    pre(x >= 0, "x must be non-negative")
+    post(x == x$ + 1)
+= {
+    x++;
+}
+
+divide: (a: i32, b: i32) -> i32
+    pre(b != 0, "divisor must not be zero")
+= {
+    return a / b;
+}
+
+check: (value: i32) = {
+    assert(value != 13, "unlucky value");
+    std::cout << "checked (value)$\n";
+}
+
+handler: (msg: * const char) = {
+    _ = msg;
+    std::cout << "violation caught\n";
+}
+
+main: () = {
+    epi::default_.set_handler(handler&);
+    v := 41;
+    increment(v);
+    std::cout << "v=(v)$\n";
+    std::cout << "div=(divide(10, 2))$\n";
+    check(7);
+    check(13);
+    std::cout << "after\n";
+}

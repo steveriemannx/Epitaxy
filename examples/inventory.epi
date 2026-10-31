@@ -1,0 +1,49 @@
+// A mutable record type, an enum, contracts and inspect.
+#include <iostream>
+#include <string>
+#include <vector>
+
+category: @enum type = {
+    tool;
+    food;
+    book;
+}
+
+item: type = {
+    name: std::string = "(unnamed)";
+    kind: category = ();
+    quantity: i32 = 0;
+
+    operator=: (out this, namev: std::string, kindv: category) = {
+        name = namev;
+        kind = kindv;
+        quantity = 0;
+    }
+
+    add: (inout this, n: i32)
+        pre(n > 0, "quantity to add must be positive")
+        post(quantity == quantity$ + n)
+    = {
+        quantity += n;
+    }
+
+    describe: (this) -> std::string = {
+        return inspect kind -> std::string {
+            is (category::tool) = "(name)$ (tool, qty (quantity)$)";
+            is (category::food) = "(name)$ (food, qty (quantity)$)";
+            is _ = "(name)$ (other, qty (quantity)$)";
+        };
+    }
+}
+
+main: () = {
+    items: std::vector<item> = ();
+    _ = items.emplace_back(item("hammer", category::tool));
+    _ = items.emplace_back(item("apple", category::food));
+    _ = items.emplace_back(item("manual", category::book));
+
+    for items do (inout it) {
+        it.add(3);
+        std::cout << it.describe() << "\n";
+    }
+}

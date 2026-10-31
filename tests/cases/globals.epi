@@ -1,0 +1,17 @@
+#include <iostream>
+#include <string>
+
+counter: i32 = 0;
+greeting: std::string = "hi";
+prefix: i32 == 7;
+
+bump: () = {
+    counter += 1;
+}
+
+main: () = {
+    std::cout << "start=(counter)$, greeting=(greeting)$, prefix=(prefix)$\n";
+    bump();
+    bump();
+    std::cout << "end=(counter)$\n";
+}

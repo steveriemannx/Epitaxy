@@ -1,0 +1,28 @@
+#include <iostream>
+
+may_throw: (fail: bool) = {
+    if fail {
+        throw( "boom" );
+    }
+    std::cout << "no throw\n";
+}
+
+main: () = {
+    may_throw(false);
+    try {
+        may_throw(true);
+    }
+    catch (msg: * const char) {
+        std::cout << "caught: " << msg << "\n";
+    }
+
+    try {
+        throw( 42 );
+    }
+    catch (code: i32) {
+        std::cout << "code=(code)$\n";
+    }
+    catch (_) {
+        std::cout << "other\n";
+    }
+}

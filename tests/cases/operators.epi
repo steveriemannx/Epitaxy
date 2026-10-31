@@ -1,0 +1,27 @@
+#include <iostream>
+
+vec2: type = {
+    x: i32 = 0;
+    y: i32 = 0;
+
+    operator=: (out this, xv: i32, yv: i32) = {
+        x = xv;
+        y = yv;
+    }
+
+    operator+: (this, that) -> vec2 = {
+        return vec2(x + that.x, y + that.y);
+    }
+
+    operator==: (this, that) -> bool = x == that.x && y == that.y;
+}
+
+main: () = {
+    a: vec2 = (1, 2);
+    b: vec2 = (3, 4);
+    c := a + b;
+    std::cout << "c=((c.x)$, (c.y)$)\n";
+    if c == vec2(4, 6) {
+        std::cout << "equal\n";
+    }
+}

@@ -1,0 +1,30 @@
+#include <iostream>
+#include <string>
+#include <any>
+
+classify: (x) -> std::string = inspect x -> std::string {
+    is 0 = "zero";
+    is 7 = "seven";
+    is i32 = "some int";
+    is std::string = "string";
+    is _ = "other";
+};
+
+from_any: (a: std::any) -> std::string = inspect a -> std::string {
+    is i32 = "int in any";
+    is std::string = "string in any";
+    is _ = "other in any";
+};
+
+main: () = {
+    std::cout << classify(0) << "\n";
+    std::cout << classify(7) << "\n";
+    std::cout << classify(5) << "\n";
+    std::cout << classify("hi") << "\n";
+    std::cout << classify(2.5) << "\n";
+
+    a: std::any = 42;
+    std::cout << from_any(a) << "\n";
+    a = std::string("text");
+    std::cout << from_any(a) << "\n";
+}

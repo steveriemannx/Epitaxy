@@ -1,0 +1,7 @@
+#include <iostream>
+
+main: () = {
+    std::cout << "sum=((1 ..= 100).sum())$\n";
+    std::cout << "contains99=((1 ..< 100).contains(99))$\n";
+    std::cout << "contains100=((1 ..< 100).contains(100))$\n";
+}

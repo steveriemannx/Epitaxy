@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.cxx }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cxx: g++
+            python: "3.12"
+          - os: ubuntu-latest
+            cxx: clang++
+            python: "3.12"
+          - os: macos-latest
+            cxx: clang++
+            python: "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Show toolchain versions
+        run: |
+          python3 --version
+          ${{ matrix.cxx }} --version
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests/unit -v
+
+      - name: Integration tests
+        env:
+          CXX: ${{ matrix.cxx }}
+        run: python3 tests/run_tests.py
+
+      - name: Install and smoke test the CLI
+        run: |
+          python3 -m pip install .
+          printf '#include <iostream>\nmain: () = { std::cout << "ok\\n"; }\n' > /tmp/smoke.epi
+          epitaxy --run -q /tmp/smoke.epi

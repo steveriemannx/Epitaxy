@@ -1,0 +1,20 @@
+#include <iostream>
+
+bump: (p: *i32) = {
+    p* += 1;
+}
+
+main: () = {
+    x := 41;
+    p: *i32 = x&;
+    bump(p);
+    std::cout << "x=(x)$ deref=(p*)$\n";
+
+    pp: * *i32 = p&;
+    std::cout << "double=(pp**)$\n";
+
+    q: *i32 = nullptr;
+    if q == nullptr {
+        std::cout << "null\n";
+    }
+}

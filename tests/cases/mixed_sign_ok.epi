@@ -1,0 +1,9 @@
+#include <iostream>
+
+main: () = {
+    a: i32 = 1;
+    b: u32 = 2;
+    if a < b {
+        std::cout << "less\n";
+    }
+}

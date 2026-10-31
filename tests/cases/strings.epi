@@ -1,0 +1,20 @@
+#include <iostream>
+#include <string>
+
+main: () = {
+    name := "World";
+    n := 7;
+    std::cout << "Hello, (name)$! n=(n)$\n";
+
+    pi := 3.14159;
+    std::cout << "pi=(pi:.2f)$ hex=(255:#x)$ pad=(5:02d)$\n";
+
+    raw := R"(no (interp)$ here)";
+    std::cout << raw << "\n";
+
+    escaped := "literal \$ and \(x)$";
+    std::cout << escaped << "\n";
+
+    flag := true;
+    std::cout << "flag=(flag)$\n";
+}

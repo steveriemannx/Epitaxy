@@ -1,0 +1,18 @@
+#include <iostream>
+#include <string>
+#include <any>
+
+main: () = {
+    a: std::any = 0;
+    if a is i32 {
+        std::cout << "a is i32\n";
+    }
+    a = std::string("text");
+    if a is std::string {
+        std::cout << "a is string\n";
+    }
+    std::cout << "as=(a as std::string)$\n";
+
+    x := 65;
+    std::cout << "as i32=(x as i32)$\n";
+}

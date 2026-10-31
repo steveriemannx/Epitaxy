@@ -1,0 +1,22 @@
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+main: () = {
+    s := "-ish";
+    v: std::vector = (1, 2, 3);
+    std::ranges::for_each(v, :(i) = {
+        std::cout << "item(i)$(s)$ ";
+    });
+    std::cout << "\n";
+
+    base := 10;
+    add_base := :(x: i32) -> i32 = { return x + base; };
+    std::cout << "add=(add_base(5))$\n";
+
+    captured := :() = {
+        std::cout << "captured=(base$)$\n";
+    };
+    base = 99;
+    captured();
+}

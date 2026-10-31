@@ -1,0 +1,32 @@
+// A tiny text report using maps, algorithms and UFCS.
+#include <algorithm>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+
+word_count: (words: std::vector<std::string>) -> std::map<std::string, i32> = {
+    counts: std::map<std::string, i32> = ();
+    for words do (word) {
+        counts[word] += 1;
+    }
+    return counts;
+}
+
+main: () = {
+    words: std::vector<std::string> = ("pear", "apple", "pear", "plum", "pear", "apple");
+
+    counts := word_count(words);
+    for counts do (_) {
+        // iterate key/value pairs
+        std::cout << "counted\n";
+        break;
+    }
+
+    pears := counts["pear"];
+    apples := counts["apple"];
+    std::cout << "pear=(pears)$ apple=(apples)$\n";
+
+    words.std::ranges::sort();
+    std::cout << "first=(words[0])$ last=(words[words.ssize() - 1])$\n";
+}

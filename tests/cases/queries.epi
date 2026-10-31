@@ -1,0 +1,51 @@
+#include <iostream>
+#include <string>
+#include <variant>
+#include <optional>
+#include <any>
+
+shape: @interface type = {
+    name: (this) -> std::string;
+}
+
+circle: type = {
+    this: shape;
+    name: (override this) -> std::string = "circle";
+}
+
+describe_variant: (v: std::variant<i32, std::string>) -> std::string = {
+    if v is i32 {
+        return "i32";
+    }
+    if v is std::string {
+        return "string";
+    }
+    return "other";
+}
+
+main: () = {
+    v: std::variant<i32, std::string> = 42;
+    std::cout << describe_variant(v) << "\n";
+    v = std::string("hi");
+    std::cout << describe_variant(v) << "\n";
+
+    o: std::optional<i32> = ();
+    if o is i32 {
+        std::cout << "has value\n";
+    } else {
+        std::cout << "empty\n";
+    }
+    o = 7;
+    if o is i32 {
+        std::cout << "has (o as i32)$\n";
+    }
+
+    a: std::any = 3;
+    std::cout << "any=(a as i32)$\n";
+
+    c: circle = ();
+    p: *shape = c&;
+    if p is *circle {
+        std::cout << "is circle\n";
+    }
+}

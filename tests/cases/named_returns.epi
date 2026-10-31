@@ -1,0 +1,16 @@
+#include <iostream>
+
+divide: (a: i32, b: i32) -> (quotient: i32, remainder: i32) = {
+    quotient = a / b;
+    remainder = a % b;
+}
+
+single: () -> (value: i32) = {
+    value = 42;
+}
+
+main: () = {
+    d := divide(11, 5);
+    std::cout << "(d.quotient)$, (d.remainder)$\n";
+    std::cout << "single=(single())$\n";
+}

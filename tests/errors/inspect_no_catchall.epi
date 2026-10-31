@@ -1,0 +1,9 @@
+#include <iostream>
+
+classify: (x) -> std::string = inspect x -> std::string {
+    is 0 = "zero";
+};
+
+main: () = {
+    std::cout << classify(1);
+}

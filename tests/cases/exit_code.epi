@@ -1,0 +1,6 @@
+#include <iostream>
+
+main: () -> i32 = {
+    std::cout << "returning 3\n";
+    return 3;
+}

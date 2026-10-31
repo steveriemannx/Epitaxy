@@ -1,0 +1,22 @@
+#include <iostream>
+#include <map>
+#include <string>
+
+BufferSize: i32 == 1'000'000;
+
+imap: <T> type == std::map<i32, T>;
+
+pi: <T: type> T == T(3.14159);
+
+square: (i: i32) -> _ == i * i;
+
+main: () = {
+    std::cout << "buffer=(BufferSize)$\n";
+
+    m: imap<std::string> = ();
+    m[1] = "one";
+    std::cout << "map=(m[1])$\n";
+
+    std::cout << "square=(square(9))$\n";
+    std::cout << "pi=(pi<double>)$\n";
+}

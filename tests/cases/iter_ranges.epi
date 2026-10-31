@@ -1,0 +1,11 @@
+#include <iostream>
+#include <vector>
+
+main: () = {
+    v: std::vector = (10, 20, 30, 40, 50);
+    start := v.begin();
+    for start ..< v.end() do (it) {
+        std::cout << (it*)$ << " ";
+    }
+    std::cout << "\n";
+}

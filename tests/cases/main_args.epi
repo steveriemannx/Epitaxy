@@ -1,0 +1,9 @@
+#include <iostream>
+
+main: (args) -> i32 = {
+    std::cout << "count=(args.ssize())$\n";
+    for args do (a) {
+        std::cout << "arg: (a)$\n";
+    }
+    return 0;
+}

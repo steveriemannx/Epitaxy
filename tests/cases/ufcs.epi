@@ -1,0 +1,24 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+
+double_it: (n: i32) -> i32 = n * 2;
+
+shout: (s: std::string) -> std::string = s + "!";
+
+main: () = {
+    x := 21;
+    std::cout << x.double_it() << "\n";
+
+    s := "hey";
+    std::cout << s.shout() << "\n";
+
+    v: std::vector = (3, 1, 2);
+    v.std::ranges::sort();
+    for v do (e) {
+        std::cout << e;
+    }
+    std::cout << "\n";
+    std::cout << "size=(v.size())$\n";
+}

@@ -1,0 +1,21 @@
+#include <iostream>
+#include <string>
+#include <type_traits>
+
+print_all: <Ts...: type> (args...: Ts) = {
+    (std::cout << ... << args);
+}
+
+count_args: <Ts...: type> (args...: Ts) -> i32 = {
+    return sizeof...(Ts);
+}
+
+same: <T> (a: T, b: T) requires std::same_as<T, T> = {
+    std::cout << "same types\n";
+}
+
+main: () = {
+    print_all(1, " two ", 3.5, "\n");
+    std::cout << "count=(count_args(1, 2, 3))$\n";
+    same(1, 2);
+}

@@ -1,0 +1,27 @@
+// Template parameters, variadic packs, fold expressions and ranges.
+#include <iostream>
+#include <string>
+
+sum_all: <Ts...: type> (values...: Ts) -> _ = {
+    total := (0 + ... + values);
+    return total;
+}
+
+show_all: <Ts...: type> (values...: Ts) = {
+    (std::cout << ... << values);
+    std::cout << "\n";
+}
+
+repeat: (count: i32, what: std::string) -> std::string = {
+    result: std::string = "";
+    for 1 ..= count do (_) {
+        result += what;
+    }
+    return result;
+}
+
+main: () = {
+    std::cout << "sum: (sum_all(1, 2, 3, 4))$\n";
+    show_all("pack: ", 1, " ", 2.5, " ", "end");
+    std::cout << "repeat: " << repeat(3, "ab") << "\n";
+}

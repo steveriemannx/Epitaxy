@@ -1,0 +1,52 @@
+#include <iostream>
+
+point: type = {
+    x: i32 = 0;
+    y: i32 = 0;
+
+    operator=: (out this, xv: i32, yv: i32) = {
+        x = xv;
+        y = yv;
+    }
+
+    operator=: (out this, that) = { }
+
+    sum: (this) -> i32 = x + y;
+
+    print: (this) = std::cout << "point((x)$, (y)$)\n";
+
+    translate: (inout this, dx: i32, dy: i32) = {
+        x += dx;
+        y += dy;
+    }
+}
+
+plain: @value type = {
+    public a: i32 = 0;
+    public b: i32 = 0;
+}
+
+copiable: @copyable type = {
+    public value: i32 = 0;
+}
+
+main: () = {
+    p: point = (1, 2);
+    p.print();
+    q := p;
+    q.translate(10, 20);
+    q.print();
+    r: point = (move q);
+    r.print();
+    std::cout << "sum: (r.sum())$\n";
+
+    w: plain = ();
+    w.a = 3;
+    w.b = 4;
+    std::cout << "plain: (w.a)$, (w.b)$\n";
+
+    c: copiable = ();
+    c.value = 9;
+    d := c;
+    std::cout << "copy: (d.value)$\n";
+}
