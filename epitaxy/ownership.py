@@ -604,6 +604,12 @@ class Checker:
                 return
             self.use_name(expr.name, expr, env, mode)
             return
+        if isinstance(expr, ast.QualifiedNameExpr):
+            for _name, args in expr.segments:
+                for arg in args or ():
+                    if isinstance(arg, ast.Expr):
+                        self.check_expr(arg, env)
+            return
         if isinstance(expr, ast.Unary):
             self.check_expr(expr.expr, env)
             return

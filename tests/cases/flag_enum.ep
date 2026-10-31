@@ -1,0 +1,35 @@
+#include <iostream>
+
+file_attributes: @flag_enum<u8> type = {
+    cached;
+    current;
+    obsolete;
+    cached_and_current := cached | current;
+}
+
+main: () = {
+    flags: file_attributes = ();
+    flags.set(file_attributes::cached);
+    if flags.has(file_attributes::cached) {
+        std::cout << "has cached\n";
+    }
+
+    flags.set(file_attributes::cached_and_current);
+    std::cout << "flags=(flags)$\n";
+
+    flags.clear(file_attributes::cached);
+    std::cout << "after clear=(flags)$\n";
+
+    both := file_attributes::cached | file_attributes::current;
+    flags.set(both);
+    flags.set(file_attributes::obsolete);
+    std::cout << "all=(flags)$\n";
+
+    std::cout << "has current: ";
+    if flags.has(file_attributes::current) {
+        std::cout << "yes\n";
+    }
+    else {
+        std::cout << "no\n";
+    }
+}

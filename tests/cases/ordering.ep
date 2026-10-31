@@ -1,0 +1,74 @@
+#include <iostream>
+#include <limits>
+
+point: @ordered type = {
+    public x: i32 = 0;
+    public y: i32 = 0;
+}
+
+rank: @weakly_ordered type = {
+    public value: i32 = 0;
+}
+
+measure: @partially_ordered type = {
+    public value: double = 0.0;
+}
+
+pair: @value type = {
+    public a: i32 = 0;
+    public b: i32 = 0;
+}
+
+main: () = {
+    a: point = ();
+    a.x = 1;
+    a.y = 2;
+    b: point = ();
+    b.x = 1;
+    b.y = 3;
+    if a < b {
+        std::cout << "point a<b\n";
+    }
+    if a == a {
+        std::cout << "point a==a\n";
+    }
+
+    r1: rank = ();
+    r1.value = 10;
+    r2: rank = ();
+    r2.value = 20;
+    if r1 < r2 {
+        std::cout << "rank r1<r2\n";
+    }
+
+    m1: measure = ();
+    m1.value = std::numeric_limits<double>::quiet_NaN();
+    m2: measure = ();
+    m2.value = 1.0;
+    if m1 < m2 {
+        std::cout << "measure less\n";
+    }
+    else if m1 > m2 {
+        std::cout << "measure greater\n";
+    }
+    else if m1 == m2 {
+        std::cout << "measure equal\n";
+    }
+    else {
+        std::cout << "measure unordered\n";
+    }
+
+    p: pair = ();
+    p.a = 1;
+    p.b = 2;
+    q := p;
+    if p == q {
+        std::cout << "pair equal\n";
+    }
+    r: pair = ();
+    r.a = 1;
+    r.b = 3;
+    if p < r {
+        std::cout << "pair p<r\n";
+    }
+}

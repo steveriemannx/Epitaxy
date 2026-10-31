@@ -248,9 +248,31 @@ class CodegenTests(unittest.TestCase):
         self.assertIn("red = 1", cpp)
         self.assertIn("green = 2", cpp)
 
+    def test_flag_enum_lowering(self):
+        cpp = self.generate(
+            "flags: @flag_enum<u8> type = { a; b; both := a | b; }\nmain: () = { f: flags = (); }"
+        )
+        self.assertIn("struct flags", cpp)
+        self.assertIn("enum class epi__value_t : u8", cpp)
+        self.assertIn("both = 3", cpp)
+        self.assertIn("constexpr bool has(", cpp)
+        self.assertIn("constexpr void set(", cpp)
+
+    def test_ordered_metafunction(self):
+        cpp = self.generate(
+            "point: @ordered type = { public x: i32 = 0; public y: i32 = 0; }\nmain: () = { }"
+        )
+        self.assertIn("auto operator<=>(point const&) const = default;", cpp)
+        self.assertIn("bool operator==(point const&) const = default;", cpp)
+
+    def test_singleton_metafunction(self):
+        cpp = self.generate("cfg: @singleton type = { public v: i32 = 1; }\nmain: () = { }")
+        self.assertIn("static cfg& instance()", cpp)
+        self.assertIn("cfg(cfg const&) = delete;", cpp)
+
     def test_rejected_metafunction(self):
         with self.assertRaises(CompileError):
-            self.generate("flags: @flag_enum type = { a; b; }\nmain: () = { }")
+            self.generate("flags: @regex type = { a = 1; }\nmain: () = { }")
 
 
 class OwnershipTests(unittest.TestCase):

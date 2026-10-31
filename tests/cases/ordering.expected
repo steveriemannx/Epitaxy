@@ -1,0 +1,6 @@
+point a<b
+point a==a
+rank r1<r2
+measure unordered
+pair equal
+pair p<r

@@ -387,6 +387,16 @@ class NameExpr(Expr):
 
 
 @dataclass(kw_only=True)
+class QualifiedNameExpr(Expr):
+    """A qualified name with template arguments on inner segments.
+
+    Example: ``std::numeric_limits<double>::quiet_NaN``.
+    """
+
+    segments: list = field(default_factory=list)  # list[(name, args | None)]
+
+
+@dataclass(kw_only=True)
 class Unary(Expr):
     op: str = ""
     expr: object = None

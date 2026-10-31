@@ -53,19 +53,26 @@ COMPARISON_FUNCS = {
     ">=": "cmp_ge",
 }
 
-UNSUPPORTED_METAFUNCTIONS = {
+SUPPORTED_METAFUNCTIONS = {
+    "value",
+    "copyable",
+    "interface",
+    "enum",
     "flag_enum",
-    "union",
-    "singleton",
-    "autodiff",
-    "regex",
-    "print",
     "ordered",
     "weakly_ordered",
     "partially_ordered",
     "basic_value",
     "weakly_ordered_value",
     "partially_ordered_value",
+    "singleton",
+}
+
+UNSUPPORTED_METAFUNCTIONS = {
+    "union",
+    "autodiff",
+    "regex",
+    "print",
     "default_constructible",
 }
 
@@ -536,22 +543,40 @@ class CodeGen:
     # ------------------------------------------------------------------
 
     def gen_type(self, decl: ast.TypeDecl) -> None:
-        if self._is_enum(decl):
+        metas = self._metafunction_names(decl)
+        if "enum" in metas:
             self.gen_enum(decl)
             return
+        if "flag_enum" in metas:
+            self.gen_flag_enum(decl)
+            return
+        for mf in metas:
+            if mf not in SUPPORTED_METAFUNCTIONS:
+                if mf in UNSUPPORTED_METAFUNCTIONS:
+                    self.fail(
+                        f"the @{mf} metafunction is not supported by Epitaxy 0.2; "
+                        "supported metafunctions are @value, @copyable, @interface, "
+                        "@enum, @flag_enum, the ordered family, @basic_value and "
+                        "@singleton",
+                        decl,
+                    )
+                self.fail(f"unknown metafunction '@{mf}'", decl)
+
         info = TypeInfo(decl)
-        for mf, _args in decl.metafunctions:
-            if mf == "enum":
-                continue
-            if mf in ("value", "copyable", "interface"):
-                continue
-            if mf in UNSUPPORTED_METAFUNCTIONS:
-                self.fail(
-                    f"the @{mf} metafunction is not supported by Epitaxy 0.2; "
-                    "supported metafunctions are @value, @copyable, @interface and @enum",
-                    decl,
-                )
-            self.fail(f"unknown metafunction '@{mf}'", decl)
+        copyable = any(
+            m in metas
+            for m in ("copyable", "value", "basic_value",
+                      "weakly_ordered_value", "partially_ordered_value")
+        )
+        if "value" in metas or "ordered" in metas:
+            ordering = "strong"
+        elif "weakly_ordered" in metas or "weakly_ordered_value" in metas:
+            ordering = "weak"
+        elif "partially_ordered" in metas:
+            ordering = "partial"
+        else:
+            ordering = None
+        singleton = "singleton" in metas
 
         prev_class = self._inside_class
         prev_access = self._current_access
@@ -568,7 +593,7 @@ class CodeGen:
         self.emit(f"{header + ' ' if header else ''}{decl_s} {{")
         self.indent += 1
 
-        interface = "interface" in info.metafunctions
+        interface = "interface" in metas
         if interface and info.data_members:
             self.fail(
                 "an @interface type cannot have data members; put state in a derived type",
@@ -611,7 +636,13 @@ class CodeGen:
             f.is_operator and self.this_kind(f) == "move" and len(f.params) == 1
             for f in info.functions
         )
-        self.gen_default_special_members(info)
+        if singleton:
+            self.gen_singleton_members(info)
+        self.gen_default_special_members(
+            info, copyable=copyable, is_value=("value" in metas), singleton=singleton
+        )
+        if ordering is not None:
+            self.gen_ordering_members(info, ordering)
         if has_virtual and not has_destructor:
             self.emit(f"virtual ~{decl.name}() = default;")
 
@@ -705,13 +736,31 @@ class CodeGen:
     # Special members
     # ------------------------------------------------------------------
 
-    def gen_special_member_function(self, decl: ast.FunctionDecl, info: TypeInfo) -> None:
-        if decl.contracts:
-            self.fail(
-                "contracts on operator= (constructors/assignment/destructor) are not "
-                "supported by Epitaxy 0.2",
-                decl,
+    def _special_contract_parts(self, decl: ast.FunctionDecl, ctx: FnCtx, fn_name: str):
+        """Prepare captures/pre/post checks for a special member function."""
+        post_specs = []
+        for contract in decl.contracts:
+            if self._is_unevaluated(contract):
+                continue
+            if contract.kind == "post":
+                cond, msg, group, preds = self.prepare_contract(contract, ctx, capture=True)
+                post_specs.append((cond, msg, group, preds, contract))
+        captures = list(ctx.post_captures)
+        post_checks = [
+            self.contract_check_code(cond, msg, group, preds, contract, fn_name)
+            for (cond, msg, group, preds, contract) in post_specs
+        ]
+        pre_checks = []
+        for contract in decl.contracts:
+            if self._is_unevaluated(contract) or contract.kind != "pre":
+                continue
+            cond, msg, group, preds = self.prepare_contract(contract, ctx, capture=False)
+            pre_checks.append(
+                self.contract_check_code(cond, msg, group, preds, contract, fn_name)
             )
+        return captures, pre_checks, post_checks
+
+    def gen_special_member_function(self, decl: ast.FunctionDecl, info: TypeInfo) -> None:
         this_kind = self.this_kind(decl)
         extra = [p for p in decl.params if not p.is_this]
         if decl.operator != "=":
@@ -732,7 +781,16 @@ class CodeGen:
             ctx = FnCtx(self)
             ctx.inside_class_name = info.name
             ctx.return_kind = "void"
+            captures, pre_checks, post_checks = self._special_contract_parts(
+                decl, ctx, info.name
+            )
+            for line in captures:
+                self.emit(line)
+            for check in pre_checks:
+                self.emit(check)
             self.gen_block_contents(decl, ctx)
+            for check in post_checks:
+                self.emit(check)
             self.indent -= 1
             self.emit("}")
             return
@@ -761,7 +819,11 @@ class CodeGen:
             params = ", ".join(self.param_decl(p) for p in extra)
             qualifier = "" if implicit else "explicit "
             self.emit_constructor(decl, info, f"{qualifier}{info.name}({params})", "value")
-            if len(extra) == 1:
+            has_inout = any(
+                f.is_operator and f.operator == "=" and self.this_kind(f) == "inout"
+                for f in info.functions
+            )
+            if len(extra) == 1 and not has_inout:
                 self.emit_converting_assignment(decl, info, extra[0])
             return
         self.fail("unsupported operator= constructor parameter list", decl)
@@ -777,8 +839,17 @@ class CodeGen:
         ctx = FnCtx(self)
         ctx.inside_class_name = info.name
         ctx.return_kind = "void"
+        captures, pre_checks, post_checks = self._special_contract_parts(
+            decl, ctx, info.name
+        )
+        for line in captures:
+            self.emit(line)
+        for check in pre_checks:
+            self.emit(check)
         for stmt in rest:
             self.gen_stmt(stmt, ctx)
+        for check in post_checks:
+            self.emit(check)
         self.indent -= 1
         self.emit("}")
 
@@ -865,6 +936,16 @@ class CodeGen:
                         value_param: Optional[str] = None) -> None:
         self.emit(signature + " {")
         self.indent += 1
+        ctx = FnCtx(self)
+        ctx.inside_class_name = info.name
+        ctx.return_kind = "void"
+        captures, pre_checks, post_checks = self._special_contract_parts(
+            decl, ctx, "operator="
+        )
+        for line in captures:
+            self.emit(line)
+        for check in pre_checks:
+            self.emit(check)
         explicit, rest = self.split_member_initializers(decl, info)
         mentioned = set()
         for name, rhs in explicit:
@@ -884,11 +965,10 @@ class CodeGen:
                 self.emit(f"{member.name} = std::move(that.{member.name});")
             elif member.init is not None:
                 self.emit(f"{member.name} = {self.initializer_code(member.init)};")
-        ctx = FnCtx(self)
-        ctx.inside_class_name = info.name
-        ctx.return_kind = "void"
         for stmt in rest:
             self.gen_stmt(stmt, ctx)
+        for check in post_checks:
+            self.emit(check)
         self.emit("return *this;")
         self.indent -= 1
         self.emit("}")
@@ -918,6 +998,16 @@ class CodeGen:
         param_decl = self.param_decl(param)
         self.emit(f"{info.name}& operator=({param_decl}) {{")
         self.indent += 1
+        ctx = FnCtx(self)
+        ctx.inside_class_name = info.name
+        ctx.return_kind = "void"
+        captures, pre_checks, post_checks = self._special_contract_parts(
+            decl, ctx, "operator="
+        )
+        for line in captures:
+            self.emit(line)
+        for check in pre_checks:
+            self.emit(check)
         if decl.body is not None and isinstance(decl.body.stmt, ast.Block):
             explicit, rest = self.split_member_initializers(decl, info)
         else:
@@ -940,20 +1030,12 @@ class CodeGen:
         self.indent -= 1
         self.emit("}")
 
-    def gen_default_special_members(self, info: TypeInfo) -> None:
+    def gen_default_special_members(self, info: TypeInfo, copyable: bool = False,
+                                    is_value: bool = False, singleton: bool = False) -> None:
         user_ops = [f for f in info.functions if f.is_operator and f.operator == "="]
-        if "value" in info.metafunctions:
-            if user_ops:
-                return
-            self.emit(f"{info.name}() = default;")
-            self.emit(f"{info.name}({info.name} const&) = default;")
-            self.emit(f"{info.name}({info.name}&&) = default;")
-            self.emit(f"{info.name}& operator=({info.name} const&) = default;")
-            self.emit(f"{info.name}& operator=({info.name}&&) = default;")
-            if info.data_members or info.bases:
-                self.emit(f"auto operator<=>({info.name} const&) const = default;")
+        if singleton:
             return
-        if "copyable" in info.metafunctions:
+        if is_value or copyable:
             if user_ops:
                 return
             self.emit(f"{info.name}() = default;")
@@ -966,11 +1048,246 @@ class CodeGen:
             self.emit(f"{info.name}() = default;")
 
     # ------------------------------------------------------------------
+    # Metafunction members: @singleton and the ordered family
+    # ------------------------------------------------------------------
+
+    def _ensure_public(self) -> None:
+        if self._current_access != "public":
+            self.emit("public:")
+            self._current_access = "public"
+
+    def gen_singleton_members(self, info: TypeInfo) -> None:
+        user_ops = [f for f in info.functions if f.is_operator and f.operator == "="]
+        if self._current_access != "private":
+            self.emit("private:")
+            self._current_access = "private"
+        if not user_ops:
+            self.emit(f"{info.name}() = default;")
+            self.emit(f"{info.name}({info.name} const&) = delete;")
+            self.emit(f"{info.name}({info.name}&&) = delete;")
+            self.emit(f"{info.name}& operator=({info.name} const&) = delete;")
+            self.emit(f"{info.name}& operator=({info.name}&&) = delete;")
+        self._ensure_public()
+        self.emit(
+            f"static {info.name}& instance() {{ static {info.name} epi__instance{{}}; "
+            "return epi__instance; }"
+        )
+
+    def gen_ordering_members(self, info: TypeInfo, kind: str) -> None:
+        user_eq = any(f.is_operator and f.operator == "==" for f in info.functions)
+        user_cmp = any(f.is_operator and f.operator == "<=>" for f in info.functions)
+        self._ensure_public()
+        if not user_eq:
+            self.emit(f"bool operator==({info.name} const&) const = default;")
+        if user_cmp:
+            return
+        if kind == "strong":
+            self.emit(f"auto operator<=>({info.name} const&) const = default;")
+            return
+        ret = "std::weak_ordering" if kind == "weak" else "std::partial_ordering"
+        self.emit(f"{ret} operator<=>({info.name} const& that) const {{")
+        self.indent += 1
+        for base in info.bases:
+            base_type = self.cpp_type(base.type)
+            self.emit(
+                f"if (auto epi__cmp = static_cast<{base_type} const&>(*this) <=> "
+                f"static_cast<{base_type} const&>(that); epi__cmp != 0) "
+                f"{{ return static_cast<{ret}>(epi__cmp); }}"
+            )
+        for member in info.data_members:
+            self.emit(
+                f"if (auto epi__cmp = this->{member.name} <=> that.{member.name}; "
+                f"epi__cmp != 0) {{ return static_cast<{ret}>(epi__cmp); }}"
+            )
+        self.emit(f"return {ret}::equivalent;")
+        self.indent -= 1
+        self.emit("}")
+
+    # ------------------------------------------------------------------
     # @enum
     # ------------------------------------------------------------------
 
+    def _metafunction_names(self, decl: ast.TypeDecl) -> list[str]:
+        return [name for name, _args in decl.metafunctions]
+
     def _is_enum(self, decl: ast.TypeDecl) -> bool:
-        return bool(decl.metafunctions) and decl.metafunctions[0][0] in ("enum", "flag_enum")
+        return "enum" in self._metafunction_names(decl)
+
+    def _is_flag_enum(self, decl: ast.TypeDecl) -> bool:
+        return "flag_enum" in self._metafunction_names(decl)
+
+    # ------------------------------------------------------------------
+    # @flag_enum
+    # ------------------------------------------------------------------
+
+    def _flag_bits(self, underlying: str) -> int:
+        widths = {
+            "u8": 8, "i8": 8, "u16": 16, "i16": 16, "u32": 32, "i32": 32,
+            "u64": 64, "i64": 64, "ushort": 16, "uint": 32, "ulong": 64,
+            "ulonglong": 64, "longlong": 64,
+        }
+        return widths.get(underlying, 32)
+
+    def _eval_flag_value(self, expr, values: dict, mask: int):
+        if isinstance(expr, ast.Literal) and expr.kind == "number":
+            return _try_int_literal(expr.raw) if hasattr(expr, "raw") else None
+        if isinstance(expr, ast.NameExpr) and len(expr.name.parts) == 1:
+            return values.get(expr.name.parts[0])
+        if isinstance(expr, ast.Unary) and expr.op == "~":
+            inner = self._eval_flag_value(expr.expr, values, mask)
+            return None if inner is None else (~inner) & mask
+        if isinstance(expr, ast.Binary) and expr.op in ("|", "&", "^", "<<", ">>"):
+            left = self._eval_flag_value(expr.left, values, mask)
+            right = self._eval_flag_value(expr.right, values, mask)
+            if left is None or right is None:
+                return None
+            if expr.op == "|":
+                return (left | right) & mask
+            if expr.op == "&":
+                return left & right
+            if expr.op == "^":
+                return (left ^ right) & mask
+            if expr.op == "<<":
+                return (left << right) & mask
+            return left >> right
+        return None
+
+    def gen_flag_enum(self, decl: ast.TypeDecl) -> None:
+        if self._inside_class is not None:
+            self.fail("nested @flag_enum types are not supported by Epitaxy 0.2", decl)
+        args = None
+        for name, meta_args in decl.metafunctions:
+            if name == "flag_enum":
+                args = meta_args
+                break
+        underlying = self.cpp_type(args[0]) if args else "u32"
+        bits = self._flag_bits(underlying)
+        mask = (1 << bits) - 1
+        enumerators = [m for m in decl.members if isinstance(m, ast.Enumerator)]
+        functions = [m for m in decl.members if isinstance(m, ast.FunctionDecl)]
+        if not enumerators:
+            self.fail("@flag_enum types need at least one enumerator", decl)
+        for member in decl.members:
+            if isinstance(member, ast.VarDecl):
+                self.fail("@flag_enum types cannot have data members in Epitaxy 0.2", member)
+
+        values: list[tuple[str, int]] = []
+        seen: dict[str, int] = {}
+        next_bit = 1
+        for enumerator in enumerators:
+            if enumerator.value is None:
+                value = next_bit
+                next_bit <<= 1
+            else:
+                value = self._eval_flag_value(enumerator.value, seen, mask)
+                if value is None:
+                    self.fail(
+                        f"cannot evaluate flag value for '{enumerator.name}'; use "
+                        "integer literals and bitwise combinations of earlier enumerators",
+                        enumerator,
+                    )
+            if enumerator.name in seen:
+                self.fail(f"duplicate enumerator '{enumerator.name}'", enumerator)
+            seen[enumerator.name] = value
+            values.append((enumerator.name, value))
+            if value:
+                candidate = 1 << (value.bit_length() - 1)
+                if candidate >= next_bit:
+                    next_bit = candidate << 1
+
+        name = decl.name
+        self.emit(f"struct {name} {{")
+        self.indent += 1
+        self.emit(
+            f"enum class epi__value_t : {underlying} {{ "
+            + ", ".join(f"{n} = {v}" for n, v in values)
+            + " };"
+        )
+        self.emit(f"using epi__underlying_t = {underlying};")
+        self.emit("epi__value_t epi__value{};")
+        self.emit("")
+        self.emit(f"constexpr {name}() = default;")
+        self.emit(f"constexpr {name}(epi__value_t value) : epi__value{{value}} {{}}")
+        self.emit(f"constexpr {name}({name} const&) = default;")
+        self.emit(f"constexpr {name}& operator=({name} const&) = default;")
+        self.emit(
+            f"constexpr {name}& operator=(epi__value_t value) "
+            "{ epi__value = value; return *this; }"
+        )
+        self.emit(f"constexpr epi__value_t epi__get() const noexcept {{ return epi__value; }}")
+        for enumerator_name, _value in values:
+            self.emit(
+                f"static constexpr epi__value_t {enumerator_name} = "
+                f"epi__value_t::{enumerator_name};"
+            )
+        self.emit("static constexpr epi__value_t none = static_cast<epi__value_t>(0);")
+        self.emit("")
+        self.emit(
+            f"constexpr bool has(epi__value_t flags) const noexcept "
+            "{ return (static_cast<epi__underlying_t>(epi__value) & "
+            "static_cast<epi__underlying_t>(flags)) == "
+            "static_cast<epi__underlying_t>(flags); }"
+        )
+        self.emit(f"constexpr bool has({name} const& flags) const noexcept {{ return has(flags.epi__get()); }}")
+        self.emit(
+            f"constexpr void set(epi__value_t flags) noexcept "
+            "{ epi__value = static_cast<epi__value_t>("
+            "static_cast<epi__underlying_t>(epi__value) | "
+            "static_cast<epi__underlying_t>(flags)); }"
+        )
+        self.emit(f"constexpr void set({name} const& flags) noexcept {{ set(flags.epi__get()); }}")
+        self.emit(
+            f"constexpr void clear(epi__value_t flags) noexcept "
+            "{ epi__value = static_cast<epi__value_t>("
+            "static_cast<epi__underlying_t>(epi__value) & "
+            "~static_cast<epi__underlying_t>(flags)); }"
+        )
+        self.emit(f"constexpr void clear({name} const& flags) noexcept {{ clear(flags.epi__get()); }}")
+        enum_info = _SimpleInfo(name)
+        for f in functions:
+            self.gen_member_function(f, enum_info)
+        self.indent -= 1
+        self.emit("};")
+        self.emit("")
+        underlying_access = f"{name}::epi__underlying_t"
+        value_t = f"{name}::epi__value_t"
+        # Namespace-scope bitwise operators for the underlying enumerator type.
+        for op, cppop in (("|", "|"), ("&", "&"), ("^", "^")):
+            self.emit(
+                f"constexpr {value_t} operator{cppop}({value_t} a, {value_t} b) noexcept "
+                f"{{ return static_cast<{value_t}>(static_cast<{underlying_access}>(a) "
+                f"{cppop} static_cast<{underlying_access}>(b)); }}"
+            )
+        self.emit(
+            f"constexpr {value_t} operator~({value_t} a) noexcept "
+            f"{{ return static_cast<{value_t}>(~static_cast<{underlying_access}>(a)); }}"
+        )
+        for cppop in ("|", "&", "^"):
+            self.emit(
+                f"constexpr {name} operator{cppop}({name} a, {name} b) noexcept "
+                f"{{ return {name}(operator{cppop}(a.epi__get(), b.epi__get())); }}"
+            )
+        self.emit(f"constexpr {name} operator~({name} a) noexcept {{ return {name}(~a.epi__get()); }}")
+        self.emit(f"constexpr bool operator==({name} a, {name} b) noexcept {{ return a.epi__get() == b.epi__get(); }}")
+        self.emit(f"constexpr bool operator!=({name} a, {name} b) noexcept {{ return !(a == b); }}")
+        self.emit("")
+        self.emit(f"inline std::string to_string({name} const& value) {{")
+        self.emit("    switch (value.epi__get()) {")
+        for enumerator_name, _value in values:
+            self.emit(
+                f'        case {name}::epi__value_t::{enumerator_name}: '
+                f'return "{enumerator_name}";'
+            )
+        self.emit(
+            '        default: return std::format("0x{:x}", '
+            f"static_cast<unsigned long long>(value.epi__get()));"
+        )
+        self.emit("    }")
+        self.emit("}")
+        self.emit(
+            f"inline std::ostream& operator<<(std::ostream& os, {name} const& value) "
+            "{ return os << to_string(value); }"
+        )
 
     def gen_enum(self, decl: ast.TypeDecl) -> None:
         if self._inside_class is not None:
@@ -1858,6 +2175,15 @@ class CodeGen:
             if wrap == "forward":
                 return f"std::forward<decltype({text})>({text})"
         return text
+
+    def _expr_qualifiednameexpr(self, node: ast.QualifiedNameExpr, ctx) -> str:
+        parts = []
+        for name, args in node.segments:
+            if args:
+                parts.append(name + self.template_args_code(args, ctx))
+            else:
+                parts.append(name)
+        return "::".join(parts)
 
     def _expr_parenthesized(self, node: ast.Parenthesized, ctx) -> str:
         return f"({self.cxpr(node.expr, ctx)})"

@@ -137,6 +137,12 @@ class _Analysis:
             for a in node.args:
                 self.walk_expr(a, "arg", depth, in_lambda)
             return
+        if isinstance(node, ast.QualifiedNameExpr):
+            for _name, args in node.segments:
+                for arg in args or ():
+                    if isinstance(arg, ast.Expr):
+                        self.walk_expr(arg, "operand", depth, in_lambda)
+            return
         if isinstance(node, ast.Member):
             self.walk_expr(node.obj, "obj", depth, in_lambda)
             return

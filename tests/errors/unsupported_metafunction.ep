@@ -1,4 +1,4 @@
-flags: @flag_enum type = {
+flags: @regex type = {
     a;
     b;
 }

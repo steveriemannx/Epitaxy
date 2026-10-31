@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.2 (draft)**
+**Version 0.3 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -496,6 +496,9 @@ exposes raw `argc` and `argv` members.
 
 ### 5.7 Function calls and UFCS
 
+Names may contain template arguments on inner segments, as in
+`std::numeric_limits<double>::quiet_NaN()`.
+
 A call `f(x)` calls a free function. A member-style call `x.f(a)` is a *unified
 function call*: it calls a member function `f` if one exists, otherwise it calls
 the free function `f(x, a)`:
@@ -652,6 +655,15 @@ shape: @interface type = { area: (this) -> double; }
 * `@interface` makes every member function `virtual` (pure virtual when it has
   no body) and gives the type a virtual destructor. Interface types cannot have
   data members.
+* `@ordered`, `@weakly_ordered`, `@partially_ordered` generate memberwise
+  `operator==` and `operator<=>`: `@ordered` uses a defaulted comparison (strong
+  ordering if all members are strongly ordered), the weakly/partially ordered
+  forms generate a comparison returning `std::weak_ordering` /
+  `std::partial_ordering`. `@basic_value` is copyable only; `@weakly_ordered_value`
+  and `@partially_ordered_value` are copyable plus the corresponding ordering.
+* `@singleton` makes the default constructor and copy/move operations private or
+  deleted and generates a `static T& instance()`; the type must be default
+  constructible.
 * `@enum` declares a safe enumeration type:
   * `name: @enum type = { a; b; c; }` — enumerators are numbered from 1;
   * `name: @enum<i16> type = { … }` selects the underlying type;
@@ -983,9 +995,10 @@ divide: (a: i32, b: i32) -> i32
   `assert<audit, is_checked_build, checking_enabled>(condition)`.
 
 A contract is checked only when its predicates are true and its group is active.
-A violation calls `group.report_violation(message)`. Contracts on `operator=`
-special members (constructors, assignment, destructor) are not supported and are
-rejected.
+A violation calls `group.report_violation(message)`. Contracts may also be
+attached to `operator=` special members; for constructors the postcondition
+captures are evaluated after the member-initializer list, immediately before the
+constructor body.
 
 ### 9.2 Assertions
 

@@ -1,0 +1,28 @@
+#include <iostream>
+
+widget: type = {
+    value: i32 = 0;
+
+    operator=: (out this, n: i32)
+        pre(n >= 0, "n must be non-negative")
+        post(value == n)
+    = {
+        value = n;
+    }
+
+    operator=: (inout this, n: i32)
+        pre(n >= 0, "n must be non-negative")
+        post(value == n)
+    = {
+        value = n;
+    }
+
+    print: (this) = std::cout << "widget value=(value)$\n";
+}
+
+main: () = {
+    w: widget = (5);
+    w.print();
+    w = 7;
+    w.print();
+}

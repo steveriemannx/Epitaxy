@@ -154,7 +154,10 @@ circle: type = {
 }
 
 color: @enum type = { red; green; blue; }
+flags: @flag_enum<u8> type = { cached; current; obsolete; }
+rank:  @ordered type = { public value: i32 = 0; }
 plain: @value type = { public a: i32 = 0; public b: i32 = 0; }
+config: @singleton type = { public value: i32 = 42; }   // config::instance()
 ```
 
 ### String interpolation, inspect, UFCS, ranges
@@ -337,8 +340,9 @@ of `<algorithm>`, `<map>`, `<numeric>`, `<optional>`, `<variant>`, `<chrono>`,
   C++ libraries, threads/data races or `Send`/`Sync`.
 * Calls into C++ are trusted as safe unless they are declared `unsafe` in
   Epitaxy; raw pointer operations are gated by `unsafe`.
-* Versus Cpp2, the largest missing pieces are: reflection and the metafunction
-  library (only `@value`, `@copyable`, `@interface`, `@enum` exist); the full
+* Versus Cpp2, the largest missing pieces are: reflection and user-defined
+  metafunctions (`@union`, `@print`, `@regex`, `@autodiff` and custom
+  metafunctions are absent); the full
   `is`/`as` query system (concepts, template names, value predicates,
   `std::expected`, customization); `out` parameter construction semantics; and
   cppfront's tooling/`cpp2::` namespace. Mixed Cpp1/Cpp2 source and modules are

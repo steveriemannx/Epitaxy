@@ -240,7 +240,7 @@ unlock the most value:
 5. proper `out` parameter proxies for deferred construction;
 6. semantic analysis for better diagnostics (e.g. mixed-sign checks for
    equality, name resolution errors at the Epitaxy stage);
-7. more metafunctions, starting with `@flag_enum` and `@union`;
+7. reflection and user-defined metafunctions, then `@union`/`@print`/`@regex`/`@autodiff`;
 8. module/import support and multi-file projects;
 9. an optional C++-implemented self-hosted compiler.
 

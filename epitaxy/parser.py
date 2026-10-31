@@ -1291,13 +1291,45 @@ class Parser:
                     args = self.parse_call_args()
                     expr = ast.Call(callee=expr, args=args, template_args=template_args, line=t.line, col=t.col)
                     continue
-                if isinstance(expr, ast.NameExpr) and not self._next_starts_operand():
+                base = expr
+                if isinstance(base, ast.NameExpr):
+                    segments = [(part, None) for part in base.name.parts]
+                elif isinstance(base, ast.QualifiedNameExpr):
+                    segments = list(base.segments)
+                else:
+                    self.pos = save
+                    break
+                if not (self.at("::") or isinstance(base, ast.NameExpr) and not self._next_starts_operand()):
+                    self.pos = save
+                    break
+                segments[-1] = (segments[-1][0], template_args)
+                while self.at("::"):
+                    self.advance()
+                    part = self.expect_ident("a name after '::'").text
+                    part_args = None
+                    if self.at("<"):
+                        save_args = self.pos
+                        try:
+                            part_args = self.parse_template_args()
+                        except CompileError:
+                            self.pos = save_args
+                            part_args = None
+                    segments.append((part, part_args))
+                if len(segments) == 1:
                     expr = ast.NameExpr(
-                        name=expr.name, template_args=template_args, line=t.line, col=t.col
+                        name=ast.Name(
+                            parts=[segments[0][0]],
+                            leading_global=base.name.leading_global if isinstance(base, ast.NameExpr) else False,
+                            line=t.line,
+                            col=t.col,
+                        ),
+                        template_args=segments[0][1],
+                        line=t.line,
+                        col=t.col,
                     )
-                    continue
-                self.pos = save
-                break
+                else:
+                    expr = ast.QualifiedNameExpr(segments=segments, line=t.line, col=t.col)
+                continue
             break
         return expr
 

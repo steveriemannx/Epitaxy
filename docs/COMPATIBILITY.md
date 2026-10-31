@@ -35,7 +35,7 @@ C++20.
 | `using` declarations and `using ns::_;` namespace imports | supported | |
 | `#include`/preprocessor lines | supported (passed through) | |
 | `__identifier__keyword` escaped identifiers | supported | |
-| `@metafunction` type declarations | partial — see §4 | |
+| `@metafunction` type declarations | partial — see §4 | 8 built-in metafunctions |
 
 ### Functions
 
@@ -66,7 +66,7 @@ C++20.
 | Type bodies: data members, member functions, nested types/aliases | supported | |
 | Access specifiers (`public`/`private`/`protected`) | supported | |
 | Base types via `this: Base;` | supported | public inheritance |
-| `@value`, `@copyable`, `@interface`, `@enum` | supported | see §3.6 |
+| `@value`, `@copyable`, `@interface`, `@enum`, `@flag_enum`, `@ordered` family, `@basic_value`, `@singleton` | supported | see §3.6 |
 | Memberwise-by-default `operator=` semantics | supported | see §3.5 |
 
 ### Expressions and statements
@@ -120,8 +120,10 @@ C++20.
 
 The short list is:
 
-* **Reflection and metaprogramming**: no reflection API, and only `@value`,
-  `@copyable`, `@interface`, `@enum` metafunctions.
+* **Reflection and metaprogramming**: no reflection API, no user-defined
+  metafunctions, and only the built-in metafunctions (`@value`, `@copyable`,
+  `@interface`, `@enum`, `@flag_enum`, the ordered family, `@basic_value`,
+  `@singleton`).
 * **Mixed Cpp1/Cpp2 source**: only preprocessor lines are passed through.
 * **Modules / multi-file builds**: none.
 * **Full `is`/`as`**: no template-name, concept or value-predicate queries; no
@@ -208,8 +210,20 @@ Explicit member initializers are used verbatim in the generated move variants
 
 ### 3.6 Metafunctions
 
-* `@value` emits default/copy/move operations and a defaulted `<=>`; it does not
-  enforce Cpp2's restrictions on virtual/protected members.
+* `@value` emits default/copy/move operations plus memberwise `operator==` and
+  `operator<=>`; it does not enforce Cpp2's restrictions on virtual/protected
+  members. `@basic_value` emits only the copy/move operations;
+  `@weakly_ordered_value` / `@partially_ordered_value` add the corresponding
+  ordering.
+* `@ordered` / `@weakly_ordered` / `@partially_ordered` generate memberwise
+  comparisons (`@ordered` uses a defaulted comparison; the weak/partial forms
+  generate a lexicographic `std::weak_ordering` / `std::partial_ordering`).
+* `@flag_enum` emits a bit-flag type: power-of-two enumerators by default,
+  explicit values (including bitwise combinations of earlier enumerators),
+  `|`, `&`, `^`, `~`, `.has`, `.set`, `.clear`, comparisons and printing. The
+  default underlying type is `u32` (not minimal-size).
+* `@singleton` makes construction/copy/move private or deleted and generates
+  `static T& instance()`; the type must be default constructible.
 * `@interface` forces `virtual` on member functions and gives the type a virtual
   destructor; data members are rejected.
 * `@enum` uses `i32` as the default underlying type (not a minimal-size type),
@@ -329,12 +343,13 @@ the one place where Epitaxy goes *beyond* Cpp2: ownership/borrow checking.)
 
 1. **Reflection and metaprogramming.** Cppfront's metafunction library is
    written in Cpp2 on top of a reflection API. Epitaxy has no reflection API and
-   only four built-in metafunctions (`@value`, `@copyable`, `@interface`,
-   `@enum`). Missing: `@weakly_ordered`, `@partially_ordered`, `@ordered`,
-   `@basic_value`, `@weakly_ordered_value`, `@partially_ordered_value`,
-   `@flag_enum`, `@union`, `@singleton`, `@regex`, `@autodiff`, `@print`, and
-   user-defined metafunctions. There is also no way to customize (suppress or
-   extend) the members a metafunction generates.
+   no user-defined metafunctions, and it supports only these built-ins:
+   `@value`, `@copyable`, `@interface`, `@enum`, `@flag_enum`, `@ordered`,
+   `@weakly_ordered`, `@partially_ordered`, `@basic_value`,
+   `@weakly_ordered_value`, `@partially_ordered_value`, `@singleton`.
+   Missing: `@union`, `@regex`, `@autodiff`, `@print`, and any way to customize
+   (suppress or extend) the members a metafunction generates.
+
 2. **Mixed Cpp1/Cpp2 source (intentional non-goal).** Only preprocessor lines
    are passed through. A `.ep` file cannot contain raw C++ declarations,
    statements or expressions. This is a deliberate design choice: Epitaxy is a
@@ -380,12 +395,15 @@ the one place where Epitaxy goes *beyond* Cpp2: ownership/borrow checking.)
 | Area | What is narrower |
 | --- | --- |
 | `is` / `as` | exact static type queries plus the dynamic cases above; no concepts/template names/predicates/customization |
-| `@enum` | `i32` default underlying type; no `@flag_enum`; no implicit conversion to/from the underlying type; only member functions in the body |
-| `@value` / `@copyable` | generates the defaulted operations and `<=>`, but does not enforce Cpp2's restrictions (e.g. no virtual/protected members) |
+| `@enum` | `i32` default underlying type; no implicit conversion to/from the underlying type; only member functions in the body |
+| `@flag_enum` | `u32` default underlying type (not minimal-size); explicit values must be constant expressions evaluable at transpile time; generated `to_string` falls back to hexadecimal for combined values |
+| `@value` / `@copyable` / `@basic_value` / `*_value` | generate the defaulted operations (and comparisons for the value family), but do not enforce Cpp2's restrictions (e.g. no virtual/protected members) |
+| ordered family | `@ordered` uses a defaulted comparison; `@weakly_ordered` / `@partially_ordered` generate lexicographic comparisons over bases and data members. Member comparison categories must be convertible to the requested ordering. |
+| `@singleton` | requires a default-constructible type; copy/move operations are deleted (Cpp2's sketch only privatizes the default constructor) |
 | `@interface` | forces `virtual` and a virtual destructor, rejects data members; no `@print` or other interface helpers |
 | `operator=` | supports the documented subset of the constructor/assignment matrix; explicit member assignments are used verbatim in generated move variants; contracts on `operator=` are an error, not applied |
 | Memberwise defaulting | only `<=>` and `==` can be defaulted memberwise; other defaulted special members are not generated |
-| Contracts | `pre`/`post`/`assert`, groups, predicates, messages and `$` captures work; contracts on constructors/assignment/destructor are rejected; message captures are evaluated at violation time, not entry; `unevaluated` is supported |
+| Contracts | `pre`/`post`/`assert`, groups, predicates, messages and `$` captures work, including on constructors/assignment/destructor; message captures are evaluated at violation time, not entry; `unevaluated` is supported |
 | `in` parameters | Epitaxy's by-value-vs-`const&` choice is a heuristic (and keeps template deduction working); Cpp2 uses a dedicated `cpp2::in<T>` type with slightly different observable behaviour |
 | `forward` parameters | no extra "convertible-to" requires-constraint when a concrete type is named |
 | Return deduction | `-> forward _` and `-> forward_ref _` are approximated with `decltype(auto)`; `forward_ref _` is not enforced to be a reference |
@@ -404,6 +422,12 @@ immediate local declarations with `:=` in scoped parameter blocks, the
 `unevaluated` contract group, defaulted memberwise `<=>`/`==`, and member
 `operator()` / `operator[]` lowering (including the checked-subscript fallback
 for types that only provide `operator[]`).
+
+In 0.3.0: contracts on `operator=` special members are checked; the ordered
+metafunction family, `@flag_enum`, `@singleton`, `@basic_value` and the
+`@*_ordered_value` combinations are implemented; `@value` now also generates
+memberwise `operator==`; qualified names with template arguments on inner
+segments (e.g. `std::numeric_limits<double>::quiet_NaN()`) are accepted.
 
 ## 5. What "syntax requirement" means here
 

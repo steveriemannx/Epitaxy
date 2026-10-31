@@ -1,0 +1,12 @@
+#include <iostream>
+
+config: @singleton type = {
+    public value: i32 = 42;
+
+    print: (this) = std::cout << "config value=(value)$\n";
+}
+
+main: () = {
+    config::instance().print();
+    std::cout << "read=(config::instance().value)$\n";
+}

@@ -1,0 +1,5 @@
+has cached
+flags=cached_and_current
+after clear=current
+all=0x7
+has current: yes
