@@ -133,6 +133,7 @@ class Tables:
         self.aliases: dict[str, ast.TypeExpr] = {}
         self.types: dict[str, ast.TypeDecl] = {}
         self.data_members: dict[str, list[tuple[str, ast.TypeExpr]]] = {}
+        self.bases: dict[str, list[ast.TypeExpr]] = {}
         self.free_functions: dict[str, list[Signature]] = {}
         self.methods: dict[tuple[str, str], list[Signature]] = {}
         self.constructors: dict[str, list[Signature]] = {}
@@ -995,8 +996,176 @@ class Checker:
                 if not mutable:
                     self.error(f"cannot borrow read-only '{place.root}' exclusively", node)
 
+    # -- thread safety (Send/Sync) ----------------------------------------
+
+    SEND_SCALARS = {
+        "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
+        "usize", "isize", "f32", "f64", "bool", "char",
+        "std::string", "std::string_view", "string", "string_view",
+        "longdouble", "longlong", "uint", "ulong", "ulonglong", "ushort",
+    }
+
+    def _callee_text(self, callee) -> Optional[str]:
+        if isinstance(callee, ast.NameExpr):
+            return "::".join(callee.name.parts)
+        return None
+
+    def _is_send(self, ty: Optional[Ty], seen=None) -> bool:
+        if ty is None or ty.kind == "unknown":
+            return True  # unmodelled C++/generic types cross the trusted boundary
+        seen = set() if seen is None else seen
+        if ty.kind == "raw":
+            return False
+        if ty.kind == "borrow":
+            inner = ty.inner or UNKNOWN
+            if ty.borrow == "inout":
+                return self._is_send(inner, seen)
+            return self._is_sync(inner, seen)
+        if ty.kind == "unique":
+            return self._is_send(ty.inner or UNKNOWN, seen)
+        if ty.kind == "shared":
+            inner = ty.inner or UNKNOWN
+            return self._is_send(inner, seen) and self._is_sync(inner, seen)
+        name = ty.name
+        if not name or name in self.SEND_SCALARS:
+            return True
+        if name in self.tables.types:
+            if name in seen:
+                return True
+            seen = seen | {name}
+            for base in self.tables.bases.get(name, ()):
+                if not self._is_send(self.resolver.ty_of(base), seen):
+                    return False
+            for _member_name, member_type in self.tables.data_members.get(name, ()):
+                if not self._is_send(self.resolver.ty_of(member_type), seen):
+                    return False
+        return True
+
+    def _is_sync(self, ty: Optional[Ty], seen=None) -> bool:
+        if ty is None or ty.kind == "unknown":
+            return True
+        seen = set() if seen is None else seen
+        if ty.kind == "raw":
+            return False
+        if ty.kind == "borrow":
+            return self._is_sync(ty.inner or UNKNOWN, seen)
+        if ty.kind == "unique":
+            return self._is_sync(ty.inner or UNKNOWN, seen)
+        if ty.kind == "shared":
+            inner = ty.inner or UNKNOWN
+            return self._is_send(inner, seen) and self._is_sync(inner, seen)
+        name = ty.name
+        if not name or name in self.SEND_SCALARS:
+            return True
+        if name in self.tables.types:
+            if name in seen:
+                return True
+            seen = seen | {name}
+            for base in self.tables.bases.get(name, ()):
+                if not self._is_sync(self.resolver.ty_of(base), seen):
+                    return False
+            for _member_name, member_type in self.tables.data_members.get(name, ()):
+                if not self._is_sync(self.resolver.ty_of(member_type), seen):
+                    return False
+        return True
+
+    def _ty_label(self, ty: Optional[Ty]) -> str:
+        if ty is None:
+            return "unknown"
+        if ty.kind in ("unique", "shared", "raw"):
+            return f"{ty.kind}<{self._ty_label(ty.inner)}>"
+        if ty.kind == "borrow":
+            return f"{ty.borrow} {self._ty_label(ty.inner)}"
+        return ty.name or ty.kind
+
+    def _arg_ty(self, expr, env: Env) -> Ty:
+        while isinstance(expr, ast.Parenthesized):
+            expr = expr.expr
+        if isinstance(expr, (ast.Move, ast.Forward)):
+            return self._arg_ty(expr.expr, env)
+        return self.infer_ty(expr, env)
+
+    def _reference_captures(self, lam: ast.Lambda) -> list[str]:
+        names: list[str] = []
+
+        def unwrap(node):
+            while isinstance(node, ast.Parenthesized):
+                node = node.expr
+            return node
+
+        def walk(node):
+            if node is None:
+                return
+            if isinstance(node, ast.Postfix) and node.op == "$":
+                inner = unwrap(node.expr)
+                if isinstance(inner, ast.Postfix) and inner.op == "&":
+                    base = unwrap(inner.expr)
+                    if isinstance(base, ast.NameExpr) and len(base.name.parts) == 1:
+                        names.append(base.name.parts[0])
+                    elif isinstance(base, ast.Id):
+                        names.append(base.name)
+                walk(node.expr)
+                return
+            if isinstance(node, ast.Lambda) and node is not lam:
+                return
+            if isinstance(node, (list, tuple)):
+                for item in node:
+                    walk(item)
+                return
+            if hasattr(node, "__dataclass_fields__"):
+                for field_name in node.__dataclass_fields__:
+                    walk(getattr(node, field_name, None))
+
+        walk(lam.body)
+        return names
+
+    def _check_thread_lambda(self, lam: ast.Lambda, env: Env) -> None:
+        for name in self._reference_captures(lam):
+            self.error(
+                f"a function expression passed to 'epi::spawn' cannot capture "
+                f"'{name}' by reference; capture it by value instead",
+                lam,
+            )
+        for name in _captured_names(lam.body):
+            local = env.locals.get(name)
+            if local is None:
+                continue
+            if not self._is_send(local.ty):
+                self.error(
+                    f"a function expression passed to 'epi::spawn' captures "
+                    f"'{name}' of type '{self._ty_label(local.ty)}' which is not 'Send'",
+                    lam,
+                )
+            if local.ty.kind == "shared" and not self._is_sync(local.ty.inner or UNKNOWN):
+                self.error(
+                    f"a function expression passed to 'epi::spawn' captures the "
+                    f"shared value '{name}' whose element type is not 'Sync'",
+                    lam,
+                )
+
+    def _check_thread_spawn(self, node: ast.Call, env: Env) -> None:
+        for arg in node.args:
+            if isinstance(arg, ast.Lambda):
+                self._check_thread_lambda(arg, env)
+                continue
+            ty = self._arg_ty(arg, env)
+            if not self._is_send(ty):
+                self.error(
+                    f"a value of type '{self._ty_label(ty)}' is not 'Send' and "
+                    "cannot be moved into a thread",
+                    arg,
+                )
+            if ty.kind == "shared" and not self._is_sync(ty.inner or UNKNOWN):
+                self.error(
+                    "a shared value whose element type is not 'Sync' cannot be "
+                    "moved into a thread",
+                    arg,
+                )
+
     def check_unknown_call(self, node: ast.Call, env: Env) -> None:
         callee = node.callee
+        if self._callee_text(callee) in ("epi::spawn", "epi::thread::spawn"):
+            self._check_thread_spawn(node, env)
         if isinstance(callee, ast.Member):
             receiver = callee.obj
             receiver_place = self.as_place(receiver, env)
@@ -1806,8 +1975,13 @@ def build_tables(tu: ast.TranslationUnit) -> Tables:
                     tables.types[item.name] = item
                     members = []
                     for member in item.members:
-                        if isinstance(member, ast.VarDecl) and member.name != "this":
-                            members.append((member.name, member.type))
+                        if isinstance(member, ast.VarDecl):
+                            if member.name == "this":
+                                tables.bases.setdefault(item.name, []).append(
+                                    member.type
+                                )
+                            else:
+                                members.append((member.name, member.type))
                     tables.data_members[item.name] = members
 
     collect(tu.items)

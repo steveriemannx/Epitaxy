@@ -341,6 +341,35 @@ class OwnershipTests(unittest.TestCase):
         cpp = self.compile("#include <vector>\nmain: () = { }")
         self.assertEqual(cpp.count("#include <vector>"), 1)
 
+    def test_thread_spawn_accepts_send_values(self):
+        cpp = transpile(
+            "work: (p: shared<i32>) = { }\n"
+            "main: () = { v: shared<i32> = shared.new<i32>(0); "
+            "t: epi::thread = epi::spawn(work, v); t.join(); }",
+            "t.ep",
+            Options(),
+        )
+        self.assertIn("epi::spawn", cpp)
+
+    def test_thread_spawn_rejects_non_send(self):
+        with self.assertRaises(CompileError) as ctx:
+            transpile(
+                "main: () = { x := 1; p: *i32 = unsafe(x&); "
+                "t: epi::thread = epi::spawn(work, p); }",
+                "t.ep",
+                Options(),
+            )
+        self.assertIn("Send", ctx.exception.message)
+
+    def test_thread_spawn_rejects_reference_capture(self):
+        with self.assertRaises(CompileError) as ctx:
+            transpile(
+                'main: () = { x := 1; t: epi::thread = epi::spawn(:() = { x&$*; }); }',
+                "t.ep",
+                Options(),
+            )
+        self.assertIn("by reference", ctx.exception.message)
+
     def test_nll_ends_borrow_after_last_use(self):
         cpp = transpile(
             "main: () = { x := 1; r: in i32 = x&; x = 2; }",

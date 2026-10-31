@@ -216,7 +216,11 @@ The pass also produces annotations used by the code generator:
 
 The checker is deliberately conservative: non-lexical borrow lifetimes with a
 lexical fallback for escaping/loop-crossing borrows, no lifetime polymorphism,
-no C++ library modelling, no `Send`/`Sync`. External
+no C++ library modelling. Structural `Send`/`Sync` computations are done for
+`epi::spawn` arguments and captures only (raw pointers are neither `Send` nor
+`Sync`, `unique<T>` inherits from `T`, `shared<T>` requires `Send + Sync`,
+user types are computed from bases and data members, unmodelled C++ types are
+trusted). External
 calls are trusted except for explicit `move` arguments. See
 [`COMPATIBILITY.md`](COMPATIBILITY.md) §3.14 for the rule list.
 

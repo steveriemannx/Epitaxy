@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.6 (draft)**
+**Version 0.7 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -1082,6 +1082,24 @@ behaviour through Epitaxy's own lowered operations. Calls into C++ are a trust
 boundary: the C++ standard library, third-party libraries and `unsafe` code are
 assumed to be correct.
 
+### 10.1 Threads and `Send`/`Sync`
+
+The checked threading API is `epi::thread` (an owned, movable, non-copyable
+thread handle from `<thread>`) and `epi::spawn(f, args...)`, which starts a
+thread and returns an `epi::thread`. Joining or detaching is explicit; dropping
+a joinable thread is a contract violation.
+
+`epi::spawn` is checked structurally: every argument moved into the thread must
+be `Send`, and every value captured by a spawned function expression must be
+`Send`. `shared<T>` is `Send`/`Sync` only if `T` is both `Send` and `Sync`
+(like `std::shared_ptr`/`Arc`); `unique<T>` is `Send` if `T` is `Send`; raw
+pointers are neither. User-defined types are computed structurally from their
+bases and data members; unmodelled C++ types are trusted. A spawned function
+expression may not capture by reference.
+
+This checks only programs that use `epi::spawn`; direct `std::thread`/
+`std::async` use and C++ libraries that start threads are outside the analysis.
+
 The following checks are on by default and can be disabled per translation unit
 with the CLI flags shown, or avoided at a specific operation with the
 `unchecked_*` functions:
@@ -1214,7 +1232,8 @@ models:
 * C++ library calls and unmodelled declarations are trusted, and their argument
   borrow relationships are not checked (except explicit `move` arguments,
   which are still tracked);
-* there is no data-race/`Send`/`Sync` analysis;
+* data-race/`Send`/`Sync` checking covers only `epi::spawn` arguments and
+  captures; arbitrary C++ threading is not modelled;
 * `unique<T>` and `shared<T>` are the only tracked owning handle types; other
   C++ types are treated as copyable values.
 

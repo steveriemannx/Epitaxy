@@ -5,7 +5,7 @@ because "safe" is meaningless without a threat model, and because Epitaxy is
 often compared to Rust — a comparison that only makes sense if the exact
 guarantee boundary is written down.
 
-**Epitaxy 0.6 is not Rust-certified.** It implements a Rust-style ownership and
+**Epitaxy 0.7 is not Rust-certified.** It implements a Rust-style ownership and
 borrow checker and a default-on checked runtime, but it compiles to C++20 and
 lets you call arbitrary C++ code. A Rust-style *unconditional* guarantee — "no
 undefined behaviour in safe code" — requires an execution model Epitaxy does not
@@ -62,6 +62,12 @@ So the honest statement is:
 > Epitaxy strict mode gives a **sound checked subset**, not Rust's blanket
 > guarantee. The subset is exactly "Epitaxy code without `unsafe`, `cpp1`,
 > raw pointers or `unchecked_*`, using C++ APIs whose own safety you trust".
+>
+> Threads created through `epi::spawn` are checked: every value moved into a
+> thread must be `Send`, captured values in a spawned function expression must
+> be `Send`, and `shared<T>` additionally requires `T: Sync`. Programs that use
+> `std::thread`, `std::async` or C++ libraries that start threads are outside
+> this check.
 
 ## 3. What is checked where
 
@@ -122,10 +128,10 @@ Rules for keeping `unsafe` sound (documented, not machine-checked):
 These are the gaps relative to Rust. They are the reason this document says
 "conditional guarantee" rather than "memory safe" or "Rust-level".
 
-| Rust guarantee | Epitaxy 0.6 |
+| Rust guarantee | Epitaxy 0.7 |
 | --- | --- |
 | no UB in safe code | conditional: excluded C++/unsafe/`unchecked_*` surface only |
-| no data races | **not checked at all** — no `Send`/`Sync`-equivalent traits or thread model |
+| no data races | **checked only for `epi::spawn`**: arguments and captured values must be `Send`, `shared<T>` requires `Send + Sync`. Direct `std::thread`/`std::async` and C++ library threading are not tracked. |
 | full lifetimes / NLL | non-lexical borrow lifetimes with conservative lexical fallback for escaping/loop-crossing borrows; no lifetime generics; no interior mutability model |
 | no null | `nullptr` exists; runtime null checks instead |
 | no uninitialized reads | `out` parameters are plain references; data members may be default-initialised |
@@ -135,7 +141,7 @@ These are the gaps relative to Rust. They are the reason this document says
 
 ## 6. Comparison to Rust in one table
 
-| Mechanism | Rust | Epitaxy 0.6 |
+| Mechanism | Rust | Epitaxy 0.7 |
 | --- | --- | --- |
 | ownership + move | yes | yes (for Epitaxy code; conservative automatic last-use move) |
 | borrow checking | NLL, lifetimes, generics | NLL for non-escaping borrows, conservative otherwise; explicit borrow sources; no lifetime generics |
@@ -143,7 +149,7 @@ These are the gaps relative to Rust. They are the reason this document says
 | integer overflow | debug checks / explicit APIs | strict mode checks lowered arithmetic; otherwise unchecked |
 | raw pointers | `unsafe` | `unsafe` |
 | FFI | `unsafe` boundary | C++ calls are *trusted*, raw C++ is `unsafe`/`cpp1` |
-| data races | compile-time `Send`/`Sync` | not checked |
+| data races | compile-time `Send`/`Sync` | structural `Send`/`Sync` for `epi::spawn` arguments/captures; C++ threading is a trust boundary |
 | no-UB guarantee | yes (safe code) | **no** (conditional subset only) |
 
 ## 7. Recommended practice
@@ -156,6 +162,9 @@ These are the gaps relative to Rust. They are the reason this document says
   and tests (`epitaxy --run` passes `CXXFLAGS` through) to catch C++-side
   undefined behaviour that the checker cannot see.
 * Prefer value types, `unique<T>`/`shared<T>` and borrows over raw pointers.
+* Create threads with `epi::spawn` (not raw `std::thread`), pass owned values
+  (`unique<T>`/`shared<T>`), join or detach every `epi::thread`, and do not
+  share mutable global state between threads.
 * Run the test suite with both clang/libc++ and GCC/libstdc++.
 
 ## 8. The path to an unconditional guarantee
@@ -165,7 +174,7 @@ To make a Rust-equivalent promise, Epitaxy would need all of:
 1. **a real front end** — typed IR and semantic analysis, so more properties can
    be checked at compile time;
 2. **full NLL and lifetime generics**, plus interior-mutability modelling (the current checker has a conservative NLL step only);
-3. **a thread model** — `Send`/`Sync`-equivalent traits and checked concurrency;
+3. **a thread model** — structural `Send`/`Sync` checking for the `epi::spawn` API exists; full concurrency safety for arbitrary C++ threading is not covered;
 4. **an execution model that cannot silently produce UB** — either an owned
    backend/runtime (no C++), or a fully modelled, trusted C++ core with
    sanitizer-backed CI;

@@ -62,6 +62,7 @@ PRELUDE_HEADERS = [
     "stdexcept",
     "string",
     "string_view",
+    "thread",
     "type_traits",
     "unordered_map",
     "utility",

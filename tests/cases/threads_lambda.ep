@@ -1,0 +1,10 @@
+#include <iostream>
+
+main: () = {
+    message: std::string = "hello from thread";
+    t: epi::thread = epi::spawn(:() = {
+        std::cout << "thread says: (message$)$\n";
+    });
+    t.join();
+    std::cout << "joined\n";
+}

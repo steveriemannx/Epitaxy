@@ -322,15 +322,19 @@ Epitaxy has two safety levels, documented in detail in
 * **Default** — ownership/borrow checking, bounds/null/div-zero/sign checks and
   an `unsafe` boundary for raw pointers. Individual checks can be disabled;
   this is best-effort, not a guarantee.
+* **Thread API** — `epi::thread` + `epi::spawn` is the checked threading
+  surface: values moved into a thread must be `Send`, and `shared<T>` requires
+  `T: Send + Sync`.
 * **Strict** (`-strict-safety`) — all checks forced on, integer arithmetic
   checked, `cpp1` blocks only inside `unsafe`. This is the level with a
   **conditional guarantee**: Epitaxy code without `unsafe`/`cpp1`/raw pointers
   cannot trigger undefined behaviour *through Epitaxy's own operations*; C++
   calls remain a trusted boundary.
 
-Epitaxy is **not Rust-certified**: there is no `Send`/`Sync` data-race checking,
-borrow lifetimes are non-lexical but conservative (no lifetime generics), and
-safe C++ interop is trusted. An
+Epitaxy is **not Rust-certified**: borrow lifetimes are non-lexical but
+conservative (no lifetime generics), safe C++ interop is trusted, and
+`Send`/`Sync` checking covers only the explicit `epi::spawn` thread API — not
+arbitrary C++ threading. An
 unconditional "safe code has no UB" guarantee would require an owned
 backend/runtime — see [`docs/SAFETY.md`](docs/SAFETY.md) §8.
 
@@ -370,8 +374,10 @@ of `<algorithm>`, `<map>`, `<numeric>`, `<optional>`, `<variant>`, `<chrono>`,
 * The borrow checker uses non-lexical lifetimes for non-escaping borrows but
   falls back to lexical scopes when a borrow may escape or is used across loop
   iterations; it has no lifetime generics beyond explicit `-> in(param) T`
-  annotations and does not model C++ libraries, threads/data races or
-  `Send`/`Sync`.
+  annotations and does not model C++ libraries.
+* Data-race checking is limited to the explicit thread API: `epi::spawn`
+  requires `Send` arguments/captures and `Send + Sync` for `shared<T>`. Raw
+  `std::thread`/`std::async` and C++ library threading are outside the analysis.
 * Safety is a **checked subset with an explicit trust boundary**, not a
   Rust-style blanket guarantee; see [`docs/SAFETY.md`](docs/SAFETY.md).
 * Calls into C++ are trusted as safe unless they are declared `unsafe` in

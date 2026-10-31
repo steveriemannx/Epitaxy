@@ -1,0 +1,12 @@
+#include <iostream>
+
+work: (p: shared<i32>) = {
+    p* = 42;
+}
+
+main: () = {
+    value: shared<i32> = shared.new<i32>(0);
+    t: epi::thread = epi::spawn(work, value);
+    t.join();
+    std::cout << "value=(value*)$\n";
+}

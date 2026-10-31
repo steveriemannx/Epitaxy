@@ -1,0 +1,9 @@
+#include <iostream>
+
+main: () = {
+    x := 1;
+    t: epi::thread = epi::spawn(:() = {
+        std::cout << "x=(x&$*)$\n";
+    });
+    t.join();
+}

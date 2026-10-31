@@ -270,9 +270,10 @@ objects with `is_active()` and `report_violation(std::string)`.
   arithmetic to checked helpers and requires raw C++ (`cpp1`) to be inside
   `unsafe`. Its conditional guarantee and trust boundary are documented in
   [`SAFETY.md`](SAFETY.md).
-* Epitaxy is **not Rust-certified**: no data-race/`Send`-`Sync` analysis, no
-  lifetime generics (borrow lifetimes are non-lexical but conservative), and C++
-  interop is a trusted boundary. See [`SAFETY.md`](SAFETY.md) for the full
+* Epitaxy is **not Rust-certified**: `Send`/`Sync` checking covers only the
+  explicit `epi::spawn` thread API, there are no lifetime generics (borrow
+  lifetimes are non-lexical but conservative), and C++ interop is a trusted
+  boundary. See [`SAFETY.md`](SAFETY.md) for the full
   comparison and the path to an unconditional guarantee.
 
 ### 3.10 `main`
@@ -343,8 +344,9 @@ Deliberate limitations: borrow lifetimes are non-lexical but conservative —
 they fall back to the lexical scope when a borrow may escape (stored in an
 aggregate, captured, or passed to code the checker cannot see) or is used
 across loop iterations; there are no lifetime variables/generics, no
-`Send`/`Sync`, no data-race detection, and no modelling of C++ library aliasing
-(external calls are trusted; only explicit `move` arguments are tracked). The checker never rejects a program because of C++
+`Send`/`Sync` checking only for `epi::spawn` arguments/captures (no arbitrary
+C++ threading analysis), and no modelling of C++ library aliasing (external
+calls are trusted; only explicit `move` arguments are tracked). The checker never rejects a program because of C++
 library internals it cannot see.
 
 ## 4. Detailed gap inventory versus Cpp2
@@ -453,6 +455,12 @@ In 0.5.0: **strict safety mode** (`-strict-safety`) with mandatory checks,
 checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
+
+In 0.7.0: the checked thread API `epi::thread`/`epi::spawn` with structural
+`Send`/`Sync` checking (arguments and captures must be `Send`; `shared<T>`
+requires `Send + Sync`; reference captures rejected; dropping a joinable thread
+is a contract violation). This covers the explicit API only, not arbitrary C++
+threading.
 
 In 0.6.0: **non-lexical borrow lifetimes** — a borrow ends at its last use, so
 the owner can be mutated/moved afterwards; unused borrows end immediately.

@@ -40,6 +40,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -838,6 +839,79 @@ public:
 
 [[noreturn]] inline void unreachable_() {
     std::abort();
+}
+
+// ---------------------------------------------------------------------------
+// Threads
+// ---------------------------------------------------------------------------
+//
+// Epitaxy exposes a small owned thread handle.  ``epi::spawn(f, args...)``
+// starts a thread and returns an ``epi::thread``; dropping a joinable thread is
+// a contract violation (Rust panics in the same situation), so either join or
+// detach explicitly.
+//
+// The ownership checker treats ``epi::spawn`` specially: every argument that is
+// moved into the new thread must be ``Send``.  This is the checked threading
+// API; direct use of ``std::thread``/``std::async`` is outside the analysis.
+
+class thread {
+public:
+    thread() noexcept = default;
+
+    explicit thread(std::thread impl) noexcept : impl_(std::move(impl)) {}
+
+    thread(thread&& other) noexcept : impl_(std::move(other.impl_)) {}
+
+    thread& operator=(thread&& other) noexcept {
+        if (impl_.joinable()) {
+            type_safety.report_violation("thread assigned over while still joinable");
+            std::terminate();
+        }
+        impl_ = std::move(other.impl_);
+        return *this;
+    }
+
+    thread(thread const&) = delete;
+    thread& operator=(thread const&) = delete;
+
+    ~thread() {
+        if (impl_.joinable()) {
+            type_safety.report_violation(
+                "thread dropped without join or detach");
+            std::terminate();
+        }
+    }
+
+    bool joinable() const noexcept { return impl_.joinable(); }
+
+    void join() {
+        if (!impl_.joinable()) {
+            type_safety.report_violation("join called on a non-joinable thread");
+            std::terminate();
+        }
+        impl_.join();
+    }
+
+    void detach() {
+        if (!impl_.joinable()) {
+            type_safety.report_violation("detach called on a non-joinable thread");
+            std::terminate();
+        }
+        impl_.detach();
+    }
+
+    static unsigned hardware_concurrency() noexcept {
+        return std::thread::hardware_concurrency();
+    }
+
+private:
+    std::thread impl_{};
+};
+
+template <class F, class... Args>
+thread spawn(F&& f, Args&&... args) {
+    return thread(
+        std::thread(std::forward<F>(f), std::forward<Args>(args)...));
 }
 
 }  // namespace epi
