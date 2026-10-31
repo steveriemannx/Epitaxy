@@ -11,7 +11,7 @@ used, copied, or derived.** The language is defined by the specification in
 program is lowered to C++20.
 
 ```cpp2
-// hello.epi
+// hello.ep
 #include <iostream>
 
 main: () = {
@@ -24,7 +24,7 @@ hello: (name: std::string_view) = {
 ```
 
 ```console
-$ python3 -m epitaxy --run hello.epi
+$ python3 -m epitaxy --run hello.ep
 Hello, world!
 ```
 
@@ -62,15 +62,18 @@ No third-party Python packages are required.
 From a checkout of this repository:
 
 ```console
-# transpile hello.epi to hello.cpp
-python3 -m epitaxy hello.epi
+# transpile hello.ep to hello.cpp
+python3 -m epitaxy hello.ep
 
 # transpile, compile with a C++20 compiler, and run
-python3 -m epitaxy --run hello.epi
+python3 -m epitaxy --run hello.ep
 
 # just print the generated C++20
-python3 -m epitaxy --emit-cpp hello.epi
+python3 -m epitaxy --emit-cpp hello.ep
 ```
+
+Epitaxy source files use the `.ep` extension by convention; the compiler does
+not require any particular extension.
 
 To install the `epitaxy` command onto your `PATH`:
 
@@ -184,7 +187,7 @@ The checks can also be disabled per translation unit with
 usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
                [--keep] [--print-cpp] [-q] [-no-subscript-checks]
                [-no-null-checks] [-no-div-zero-checks] [-no-comparison-checks]
-               [--version] FILE.epi [FILE.epi ...]
+               [--version] FILE.ep [FILE.ep ...]
 ```
 
 | Option | Meaning |
@@ -221,7 +224,7 @@ docs/
 tests/
   run_tests.py           integration suite: programs, expected output, errors
   unit/                  lexer/parser/codegen/CLI unit tests
-  cases/                 .epi programs with expected output
+  cases/                 .ep programs with expected output
   errors/                programs that must be rejected
 examples/                runnable example programs
 ```

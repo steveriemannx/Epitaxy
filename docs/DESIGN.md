@@ -25,7 +25,7 @@ Non-goals for 0.1:
 ## Pipeline
 
 ```
- .epi source
+ .ep source
      │
      ▼
  lexer.py        tokens with positions; string literals are pre-scanned for

@@ -4,7 +4,7 @@
 Test case layout
 ----------------
 
-``tests/cases/<name>.epi``
+``tests/cases/<name>.ep``
     A complete program that must compile, run, and print exactly the contents
     of ``<name>.expected`` to standard output (exit code 0 unless ``<name>.exit``
     exists, which holds the expected exit code).
@@ -15,7 +15,7 @@ Test case layout
     * ``<name>.flags``  -- compiler flags, e.g. ``-no-comparison-checks``
     * ``<name>.stdin``  -- standard input for the program
 
-``tests/errors/<name>.epi``
+``tests/errors/<name>.ep``
     A program that must be rejected.  ``<name>.error`` holds a substring of the
     expected diagnostic.  If the diagnostic comes from the C++ compiler instead
     of the Epitaxy compiler, add ``<name>.stage`` containing ``cpp``.
@@ -229,9 +229,9 @@ def main(argv: list[str] | None = None) -> int:
     def selected(path: Path) -> bool:
         return args.filter in path.stem
 
-    case_files = sorted(p for p in CASES_DIR.glob("*.epi") if selected(p))
-    error_files = sorted(p for p in ERRORS_DIR.glob("*.epi") if selected(p))
-    example_files = [] if args.no_examples else sorted(EXAMPLES_DIR.glob("*.epi"))
+    case_files = sorted(p for p in CASES_DIR.glob("*.ep") if selected(p))
+    error_files = sorted(p for p in ERRORS_DIR.glob("*.ep") if selected(p))
+    example_files = [] if args.no_examples else sorted(EXAMPLES_DIR.glob("*.ep"))
 
     for path in case_files:
         total += 1

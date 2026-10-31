@@ -45,5 +45,5 @@ jobs:
       - name: Install and smoke test the CLI
         run: |
           python3 -m pip install .
-          printf '#include <iostream>\nmain: () = { std::cout << "ok\\n"; }\n' > /tmp/smoke.epi
-          epitaxy --run -q /tmp/smoke.epi
+          printf '#include <iostream>\nmain: () = { std::cout << "ok\\n"; }\n' > /tmp/smoke.ep
+          epitaxy --run -q /tmp/smoke.ep

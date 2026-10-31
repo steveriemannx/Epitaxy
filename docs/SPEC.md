@@ -17,7 +17,7 @@ that are deliberately not part of Epitaxy 0.1.
 
 ## 1. Overview
 
-An Epitaxy source file (conventionally `*.epi`) is a sequence of *preprocessor
+An Epitaxy source file (conventionally `*.ep`) is a sequence of *preprocessor
 lines* and *declarations*. Every declaration has the same shape:
 
 ```
@@ -953,7 +953,7 @@ Narrowing conversions and unsafe casts are errors by default; use
 
 ## 11. C++ interoperability and lowering
 
-* Epitaxy is a source-to-source language: a `.epi` file becomes one `.cpp` file
+* Epitaxy is a source-to-source language: a `.ep` file becomes one `.cpp` file
   containing `#include "epi_support.hpp"` plus the lowered program.
 * All preprocessor lines in the file are emitted at the top of the generated
   file, in source order.

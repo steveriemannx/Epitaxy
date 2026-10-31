@@ -15,7 +15,7 @@ integration:
 
 # Compile and run every example program.
 examples:
-	@set -e; for f in examples/*.epi; do \
+	@set -e; for f in examples/*.ep; do \
 		echo "=== $$f"; \
 		CXX=$(CXX) $(PYTHON) -m epitaxy --run -q "$$f"; \
 	done

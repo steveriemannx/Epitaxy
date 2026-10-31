@@ -83,9 +83,9 @@ class LexerTests(unittest.TestCase):
 
     def test_unterminated_string_reports_position(self):
         with self.assertRaises(CompileError) as ctx:
-            Lexer('x := "abc', "t.epi").tokenize()
+            Lexer('x := "abc', "t.ep").tokenize()
         self.assertIn("unterminated string", ctx.exception.message)
-        self.assertEqual(ctx.exception.filename, "t.epi")
+        self.assertEqual(ctx.exception.filename, "t.ep")
 
 
 class ParserTests(unittest.TestCase):
@@ -174,10 +174,10 @@ class ParserTests(unittest.TestCase):
 
     def test_parse_error_location(self):
         with self.assertRaises(CompileError) as ctx:
-            parse("main: () = {\n  x := ;\n}", "bad.epi")
+            parse("main: () = {\n  x := ;\n}", "bad.ep")
         self.assertIn("expected an expression", ctx.exception.message)
         self.assertEqual(ctx.exception.line, 2)
-        self.assertEqual(ctx.exception.filename, "bad.epi")
+        self.assertEqual(ctx.exception.filename, "bad.ep")
 
     def test_contracts(self):
         tu = parse(
@@ -195,7 +195,7 @@ class ParserTests(unittest.TestCase):
 
 class CodegenTests(unittest.TestCase):
     def generate(self, source: str) -> str:
-        return CodeGen(Options(), "t.epi").generate(parse(source, "t.epi"))
+        return CodeGen(Options(), "t.ep").generate(parse(source, "t.ep"))
 
     def test_escaped_contextual_keywords(self):
         cpp = self.generate(
@@ -222,7 +222,7 @@ class CodegenTests(unittest.TestCase):
 
     def test_safety_checks_can_be_disabled(self):
         opts = Options(subscript_checks=False, div_checks=False)
-        cpp = CodeGen(opts, "t.epi").generate(
+        cpp = CodeGen(opts, "t.ep").generate(
             parse("main: () = { v: std::vector = (1); _ = v[0]; _ = 1 / 2; }")
         )
         self.assertNotIn("::epi::subscript(", cpp)
@@ -263,7 +263,7 @@ class CliTests(unittest.TestCase):
 
     def test_emit_cpp(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "hello.epi"
+            path = Path(tmp) / "hello.ep"
             path.write_text('main: () = { }\n')
             result = self.run_cli("--emit-cpp", str(path))
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -271,14 +271,14 @@ class CliTests(unittest.TestCase):
 
     def test_compile_error_exit_code(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "bad.epi"
+            path = Path(tmp) / "bad.ep"
             path.write_text("main: () = { x := ; }\n")
             result = self.run_cli("--emit-cpp", str(path))
             self.assertEqual(result.returncode, 1)
             self.assertIn("error:", result.stderr)
 
     def test_missing_file(self):
-        result = self.run_cli("--emit-cpp", "definitely-not-here.epi")
+        result = self.run_cli("--emit-cpp", "definitely-not-here.ep")
         self.assertEqual(result.returncode, 2)
 
     def test_version(self):

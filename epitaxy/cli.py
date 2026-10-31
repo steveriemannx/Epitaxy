@@ -2,10 +2,10 @@
 
 Usage examples::
 
-    epitaxy hello.epi                 # produce hello.cpp
-    epitaxy --run hello.epi           # transpile, compile and run
-    epitaxy --emit-cpp hello.epi      # print the generated C++20
-    epitaxy -o build/hello.cpp hi.epi
+    epitaxy hello.ep                 # produce hello.cpp
+    epitaxy --run hello.ep           # transpile, compile and run
+    epitaxy --emit-cpp hello.ep      # print the generated C++20
+    epitaxy -o build/hello.cpp hi.ep
 
 The generated C++ includes ``epi_support.hpp``; when Epitaxy compiles the
 result itself it adds its bundled support directory to the include path.
@@ -42,13 +42,13 @@ def find_cxx() -> str:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="epitaxy",
-        description="Compile Epitaxy (.epi) source files to C++20.",
+        description="Compile Epitaxy (.ep) source files to C++20.",
         epilog=(
             "Epitaxy is MIT licensed.  It follows the Cpp2 syntax requirements "
             "and contains no code from cppfront."
         ),
     )
-    parser.add_argument("files", nargs="+", metavar="FILE.epi", help="Epitaxy source file(s)")
+    parser.add_argument("files", nargs="+", metavar="FILE.ep", help="Epitaxy source file(s)")
     parser.add_argument("-o", "--output", metavar="FILE.cpp", help="output C++ file")
     parser.add_argument(
         "--emit-cpp",

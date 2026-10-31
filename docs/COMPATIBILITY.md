@@ -121,7 +121,7 @@ diagnostic where they are not:
   `x is std::integral`.
 * **Modules**: no `import`/`export`.
 * **Mixed Cpp1/Cpp2 source.** Only preprocessor lines are passed through; you
-  cannot put C++ declarations or C++ statement bodies in a `.epi` file.
+  cannot put C++ declarations or C++ statement bodies in a `.ep` file.
 * **Deferred `out` construction.** `out` parameters are plain references; there
   is no proxy that can construct an uninitialized argument, so arguments must
   already be initialized lvalues.
