@@ -1,0 +1,23 @@
+#include <iostream>
+#include <memory>
+
+consume: (move p: unique<i32>) -> i32 = {
+    return p*;
+}
+
+make: (n: i32) -> unique<i32> = {
+    p: unique<i32> = new<i32>(n);
+    return p;
+}
+
+main: () = {
+    a: unique<i32> = make(7);
+    std::cout << "a=(a*)$\n";
+
+    b: unique<i32> = make(8);
+    std::cout << "b=(consume(move b))$\n";
+
+    s: shared<i32> = shared.new<i32>(9);
+    t := s;
+    std::cout << "s=(s*)$ t=(t*)$\n";
+}

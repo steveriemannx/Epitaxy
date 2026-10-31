@@ -1,0 +1,25 @@
+#include <iostream>
+
+fill: (out value: i32) = {
+    value = 42;
+}
+
+fill_pair: (out a: i32, out b: i32) = {
+    a = 1;
+    b = 2;
+}
+
+main: () = {
+    x := 0;
+    fill(x);
+    std::cout << "x=(x)$\n";
+
+    y := 0;
+    z := 0;
+    fill_pair(y, z);
+    std::cout << "y=(y)$ z=(z)$\n";
+
+    w := 7;
+    fill(out w);
+    std::cout << "w=(w)$\n";
+}

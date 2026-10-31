@@ -1,0 +1,24 @@
+#include <iostream>
+#include <string>
+
+longer: (in a: std::string, in b: std::string) -> in(a) std::string = {
+    if a.ssize() >= b.ssize() {
+        return a&;
+    }
+    return a&;
+}
+
+first_char: (in text: std::string) -> in std::string = {
+    return text&;
+}
+
+main: () = {
+    x := std::string("hello");
+    y := std::string("hi");
+
+    ref: in std::string = longer(x, y);
+    std::cout << "longer=(ref)$\n";
+
+    first: in std::string = first_char(x);
+    std::cout << "first=(first)$\n";
+}

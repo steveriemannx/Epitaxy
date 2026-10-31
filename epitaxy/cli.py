@@ -24,9 +24,9 @@ from pathlib import Path
 from typing import Optional
 
 from . import __version__
-from .codegen import CodeGen, Options
+from .codegen import Options
+from .compiler import transpile
 from .diag import CompileError
-from .parser import parse
 
 SUPPORT_DIR = Path(__file__).resolve().parent / "support"
 SUPPORT_HEADER = SUPPORT_DIR / "epi_support.hpp"
@@ -97,6 +97,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="disable default-on mixed-sign comparison checking",
     )
+    parser.add_argument(
+        "-no-ownership-checks",
+        dest="ownership_checks",
+        action="store_false",
+        help="disable default-on ownership/borrow checking",
+    )
     parser.add_argument("--version", action="version", version=f"Epitaxy {__version__} (MIT)")
     return parser
 
@@ -106,8 +112,7 @@ def transpile_file(path: Path, options: Options) -> str:
         source = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise CompileError(f"cannot read source file: {exc}") from exc
-    tu = parse(source, str(path))
-    return CodeGen(options, str(path)).generate(tu)
+    return transpile(source, str(path), options)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -122,6 +127,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         null_checks=args.null_checks,
         div_checks=args.div_checks,
         sign_checks=args.sign_checks,
+        ownership_checks=args.ownership_checks,
     )
 
     files = [Path(f) for f in args.files]

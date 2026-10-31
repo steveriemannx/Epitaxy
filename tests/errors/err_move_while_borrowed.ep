@@ -1,0 +1,8 @@
+take: (move p: unique<i32>) -> i32 = { return p*; }
+
+main: () = {
+    a: unique<i32> = new<i32>(1);
+    r: in i32 = a*&;
+    _ = take(move a);
+    std::cout << "r=(r)$\n";
+}

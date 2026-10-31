@@ -1,0 +1,7 @@
+read_it: unsafe (p: *i32) -> i32 = { return p*; }
+
+main: () = {
+    x := 1;
+    p: *i32 = unsafe(x&);
+    _ = read_it(p);
+}

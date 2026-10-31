@@ -1,0 +1,20 @@
+#include <iostream>
+
+read_i32: unsafe (p: *i32) -> i32 = {
+    return p*;
+}
+
+main: () = {
+    x := 42;
+    raw: *i32 = unsafe(x&);
+    std::cout << "raw=(unsafe(read_i32(raw)))$\n";
+
+    unsafe {
+        std::cout << "deref=(raw*)$\n";
+    }
+
+    y: *i32 = nullptr;
+    if y == nullptr {
+        std::cout << "null pointer\n";
+    }
+}

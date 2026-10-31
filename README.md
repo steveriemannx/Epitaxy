@@ -34,17 +34,27 @@ Hello, world!
   is context free.
 - **Safe by default** — subscript bounds, null dereferences, integer division by
   zero and mixed-sign comparisons are checked unless you opt out.
+- **Ownership and borrowing** — `unique<T>` and `shared<T>` owning handles,
+  `in T` / `inout T` borrows, move checking, and an explicit `unsafe` boundary
+  for raw pointers.
 - **C++ interop** — include C++ headers with `#include` and use C++ types,
   functions and objects directly. The output is ordinary C++20.
 
 ## Status
 
-Epitaxy 0.1 is a complete vertical slice: a working lexer, parser, semantic
-lowering and C++20 code generator, a runtime support header, a CLI, an
+Epitaxy 0.2 is a complete vertical slice: a working lexer, parser, ownership and
+borrow checker, C++20 code generator, a runtime support header, a CLI, an
 integration test suite and examples. It implements a substantial, coherent
-subset of Cpp2 as documented for cppfront; the precise coverage and the
-deliberate deviations are listed in
-[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+subset of Cpp2 as documented for cppfront, and adds an ownership/borrow checking
+extension on top; the precise coverage and the deliberate deviations are listed
+in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+
+The ownership checker is on by default and rejects use-after-move, conflicting
+borrows, dangling borrow returns, move-only copies and unsafe operations outside
+`unsafe` blocks. It is a conservative, Epitaxy-level analysis: it does not model
+C++ library internals, threads/data races or full lifetime polymorphism. See
+[`docs/SPEC.md`](docs/SPEC.md) and [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)
+for the exact rule set.
 
 Everything in this repository is original work. cppfront was used only as a
 *description of the desired syntax* (its documentation), never as source code.
@@ -163,6 +173,40 @@ for 1 ..= 100 do (i) { }       // closed range
 for iter ..< end do (it) { }   // half-open range over any incrementable type
 ```
 
+### Ownership, borrowing, and `unsafe`
+
+```cpp2
+// unique<T> is move-only; shared<T> is a shared owning handle.
+make: (n: i32) -> unique<i32> = {
+    p: unique<i32> = new<i32>(n);
+    return p;                      // ownership transfer
+}
+
+consume: (move p: unique<i32>) -> i32 = p*;
+
+read: (in value: i32) -> i32 = value;          // shared borrow
+add_to: (inout value: i32, amount: i32) = { value += amount; }  // exclusive borrow
+
+first: (in text: std::string) -> in std::string = text&;  // borrow tied to `text`
+
+main: () = {
+    a := make(7);
+    b := consume(move a);          // `a` is moved; further use is an error
+    x := 10;
+    add_to(x, 5);                  // exclusive borrow for the call
+    r: in i32 = x&;                // local shared borrow
+    std::cout << "r=(r)$\n";       // reads through the borrow
+
+    // Raw pointers require an explicit unsafe boundary:
+    raw: *i32 = unsafe(x&);
+    value := unsafe(raw*);
+}
+```
+
+The checker rejects, among others: using a moved value; moving or mutating a
+borrowed value; two conflicting borrows of the same place; returning a borrow of
+a local; copying `unique<T>`; dereferencing a raw pointer outside `unsafe`.
+
 ### Safety you can see
 
 ```cpp2
@@ -200,7 +244,7 @@ usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
 | `--keep` | keep the intermediate C++ file and executable |
 | `--print-cpp` | also print the generated C++ to standard error |
 | `-q` | suppress informational messages |
-| `-no-*-checks` | disable a default-on safety check |
+| `-no-*-checks` | disable a default-on safety check (`name`, `null`, `div-zero`, `comparison`, `ownership`) |
 | `--version` | print the compiler version |
 
 Environment variables: `CXX` selects the C++ compiler and `CXXFLAGS` adds extra
@@ -213,6 +257,8 @@ epitaxy/                 the compiler
   lexer.py               tokens, literals, string interpolation
   parser.py              context-free recursive-descent parser
   ast.py                 abstract syntax tree
+  ownership.py           ownership, borrow and unsafe-boundary checking
+  compiler.py            pipeline: parse -> ownership check -> codegen
   codegen.py             C++20 lowering
   moveanalysis.py        conservative definite-last-use analysis
   cli.py                 command line interface
@@ -232,7 +278,8 @@ examples/                runnable example programs
 ## Testing
 
 ```console
-# integration suite: generates C++, compiles it, runs it, compares output
+# integration suite: generates C++, compiles it, runs it, compares output;
+# also runs ownership/borrow error tests and compiles every example
 python3 tests/run_tests.py
 
 # unit tests
@@ -255,8 +302,19 @@ CXX=clang++ python3 tests/run_tests.py
   structure, declarations, types, expressions, statements, contracts, safety,
   metafunctions, C++ lowering.
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — what of Cpp2 is supported,
-  what is intentionally different, and what is not implemented in 0.1.
+  what is intentionally different, and what is not implemented in 0.2.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — how the compiler is built and why.
+
+## Known limitations (0.2)
+
+* The borrow checker uses lexical borrow lifetimes (no NLL), has no lifetime
+  polymorphism beyond explicit `-> in(param) T` annotations, and does not model
+  C++ libraries, threads/data races or `Send`/`Sync`.
+* Calls into C++ are trusted as safe unless they are declared `unsafe` in
+  Epitaxy; raw pointer operations are gated by `unsafe`.
+* Cpp2 metafunctions beyond `@value`, `@copyable`, `@interface` and `@enum` are
+  not implemented.
+* The full list is in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
 
 ## License and independence
 

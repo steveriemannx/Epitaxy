@@ -1,0 +1,6 @@
+dangling: () -> in i32 = {
+    local := 42;
+    return local&;
+}
+
+main: () = { }

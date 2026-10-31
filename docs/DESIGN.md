@@ -15,7 +15,7 @@ Goals:
 * generate ordinary C++20 that works with existing C++ libraries, so the
   language is useful immediately.
 
-Non-goals for 0.1:
+Non-goals for 0.2:
 
 * C++ type checking or whole-program semantic analysis;
 * reflection and user-defined metafunctions;
@@ -36,6 +36,9 @@ Non-goals for 0.1:
  ast.py
      │
      ▼
+ ownership.py    ownership, borrow, move and unsafe-boundary checking
+     │           (produces code-generation annotations)
+     ▼
  codegen.py      C++20 lowering, with moveanalysis.py for automatic moves
      │
      ▼
@@ -48,6 +51,10 @@ Non-goals for 0.1:
 The compiler is a pure Python package with no third-party dependencies, so it
 runs anywhere Python 3.10+ runs. Generated programs need only a C++20 compiler
 and the bundled `epi_support.hpp`.
+
+`compiler.py` ties the pipeline together: `transpile(source, filename,
+options)` parses, runs the ownership checker and generates C++. The CLI and the
+test harness use it, so the default-on checks apply everywhere.
 
 ## Lexer
 
@@ -89,7 +96,7 @@ Because the same stop set applies at every precedence level, no special cases
 are needed in the precedence-climbing code.
 
 Error state: the parser raises `CompileError` at the first problem with a source
-position. Recovery is out of scope for 0.1.
+position. Recovery is out of scope for 0.2.
 
 ## AST
 
@@ -155,6 +162,38 @@ Notes on specific lowerings:
   enclosing lambda state, address-taken state and parent expression context, and
   marks the last safe use for `std::move`/`std::forward` (conservatively).
 
+## Ownership and borrow checking
+
+`ownership.py` is a separate semantic pass over the AST. It builds lightweight
+type tables (type aliases, user type data members, function/method signatures)
+and then walks every Epitaxy function with an environment that tracks:
+
+* locals and parameters with their type category (`value`, `unique<T>`,
+  `shared<T>`, borrow, raw pointer), mutability, move state and `out`
+  initialization state;
+* active borrows (root variable, path, shared/exclusive kind, holder, scope);
+* unsafe context depth and loop depth.
+
+Places are modelled as `(root variable, path)` pairs, where members, subscripts
+and dereferences extend the path. Borrow conflicts are decided by path overlap.
+Checks are performed exactly where they are sound rather than as a separate data
+flow analysis: reads/writes/moves validate against the active borrows, calls
+build borrow "plans" from the callee's parameter kinds and check aliasing among
+the arguments, and returns validate borrow provenance. Branches merge move/out
+state (intersection), loops conservatively reject moving outer-declared
+variables.
+
+The pass also produces annotations used by the code generator:
+
+* `deduced_borrow` — a deduced local whose initializer returns a borrow must be
+  emitted as a reference (`auto const&` / `auto&`), not a copy;
+* `borrow_names` — borrow locals are never automatically moved.
+
+The checker is deliberately conservative: lexical borrow lifetimes, no NLL, no
+lifetime polymorphism, no C++ library modelling, no `Send`/`Sync`. External
+calls are trusted except for explicit `move` arguments. See
+[`COMPATIBILITY.md`](COMPATIBILITY.md) §3.14 for the rule list.
+
 ## Runtime support header
 
 `epitaxy/support/epi_support.hpp` is a self-contained C++20 header (MIT,
@@ -189,18 +228,18 @@ The language limitations are listed in
 [`COMPATIBILITY.md`](COMPATIBILITY.md). Implementation-level work that would
 unlock the most value:
 
-1. semantic analysis for better diagnostics (e.g. real mixed-sign checks for
-   equality, name resolution errors at the Epitaxy stage);
-2. a `cpp2::in`-like deducible parameter type to remove the by-value/by-reference
+1. non-lexical lifetimes (NLL) and lifetime variables for the ownership checker;
+2. `Send`/`Sync` (or equivalent) analysis to prevent data races;
+3. modelling of C++ library aliasing (e.g. `vector` reallocation invalidating
+   borrowed elements) and library annotations;
+4. a deducible `in`-like parameter type to remove the by-value/by-reference
    heuristic;
-3. proper `out` parameter proxies for deferred construction;
-4. full last-use analysis with control-flow graph instead of the conservative
-   approximation;
-5. more metafunctions, starting with `@flag_enum` and `@union`;
-6. module/import support and multi-file projects;
-7. additional `is` constraint kinds (template names, concepts) by emitting
-   macro-based probes;
-8. an optional C++-implemented self-hosted compiler.
+5. proper `out` parameter proxies for deferred construction;
+6. semantic analysis for better diagnostics (e.g. mixed-sign checks for
+   equality, name resolution errors at the Epitaxy stage);
+7. more metafunctions, starting with `@flag_enum` and `@union`;
+8. module/import support and multi-file projects;
+9. an optional C++-implemented self-hosted compiler.
 
 ## Extending the compiler
 
@@ -212,6 +251,10 @@ Adding a statement or expression usually means:
 3. lower it in `codegen.py` (`gen_stmt` or `_expr_*`);
 4. add an integration test in `tests/cases/` and an error test if applicable;
 5. document it in `docs/SPEC.md` and `docs/COMPATIBILITY.md`.
+
+Adding a checked rule starts in `ownership.py`; add a positive integration test,
+an error test under `tests/errors/`, and document the rule in `docs/SPEC.md`
+§11 and `docs/COMPATIBILITY.md` §3.14.
 
 Adding runtime behaviour starts in `epi_support.hpp`; the generated code can
 call anything in the `epi` namespace.

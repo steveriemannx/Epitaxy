@@ -1,0 +1,9 @@
+both: (inout x: i32, inout y: i32) = {
+    x += 1;
+    y += 1;
+}
+
+main: () = {
+    a := 1;
+    both(a, a);
+}

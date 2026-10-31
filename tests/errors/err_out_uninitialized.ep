@@ -1,0 +1,6 @@
+fill: (out x: i32) = { }
+
+main: () = {
+    v := 0;
+    fill(v);
+}

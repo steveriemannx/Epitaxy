@@ -44,7 +44,7 @@ main: () = {
     std::cout << "any=(a as i32)$\n";
 
     c: circle = ();
-    p: *shape = c&;
+    p: *shape = unsafe(c&);
     if p is *circle {
         std::cout << "is circle\n";
     }

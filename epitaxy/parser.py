@@ -292,6 +292,13 @@ class Parser:
                 args = self.parse_template_args()
             metafunctions.append((at_tok.text, args))
 
+        is_unsafe = False
+        if self.at_kw("unsafe") and self.peek(1).text in ("(", "<"):
+            self.advance()
+            is_unsafe = True
+            if self.at("<"):
+                template_params = self.parse_template_params()
+
         if self.at_kw("type"):
             self.advance()
             if self.match("=="):
@@ -353,7 +360,9 @@ class Parser:
             )
 
         if self.at("("):
-            return self.parse_function_like(name, None, scope, access, line, col, template_params)
+            return self.parse_function_like(
+                name, None, scope, access, line, col, template_params, is_unsafe=is_unsafe
+            )
 
         # variable, variable template, or alias
         type_ = self.parse_type_with_constraint()
@@ -393,6 +402,7 @@ class Parser:
         line: int,
         col: int,
         template_params: Optional[list] = None,
+        is_unsafe: bool = False,
     ):
         params = self.parse_params()
         returns = self.parse_returns() if self.at("->") else None
@@ -436,6 +446,7 @@ class Parser:
             kind=kind,
             access=access,
             is_declaration_only=is_declaration_only,
+            is_unsafe=is_unsafe,
             line=line,
             col=col,
         )
@@ -580,6 +591,27 @@ class Parser:
             self.expect(")", "')' to close the return parameter list")
             return ast.Returns(kind="named", named=named, line=self.tok.line, col=self.tok.col)
 
+        if (
+            self.tok.kind == IDENT
+            and self.tok.text in ("in", "inout", "out")
+            and not self.tok.escaped_ident
+        ):
+            kw = self.advance()
+            source = None
+            if self.at("("):
+                self.advance()
+                source = self.expect_ident("the name of the borrowed parameter").text
+                self.expect(")", "')' after the borrow source")
+            type_ = self.parse_type_with_constraint()
+            return ast.Returns(
+                kind="single",
+                type=type_,
+                borrow_kind=kw.text,
+                borrow_source=source,
+                line=kw.line,
+                col=kw.col,
+            )
+
         forward = False
         forward_ref = False
         if self.at_ident("forward_ref"):
@@ -660,6 +692,21 @@ class Parser:
         return type_
 
     def parse_type_expr(self):
+        if (
+            self.tok.kind == IDENT
+            and self.tok.text in ("in", "inout", "out")
+            and not self.tok.escaped_ident
+        ):
+            nxt = self.peek(1)
+            starts_type = nxt.kind == IDENT or (
+                nxt.kind == OP and nxt.text in ("*", "(", "const")
+            )
+            if starts_type:
+                kw = self.advance()
+                inner = self.parse_type_expr()
+                return ast.BorrowType(
+                    kind=kw.text, inner=inner, line=kw.line, col=kw.col
+                )
         ops: list[str] = []
         while True:
             if self.tok.kind == IDENT and self.tok.text == "const":
@@ -830,6 +877,11 @@ class Parser:
 
         if self.at("{"):
             return self.parse_block()
+
+        if self.at_kw("unsafe") and self.peek(1).text == "{":
+            self.advance()
+            body = self.parse_block()
+            return ast.UnsafeBlock(stmt=body, line=t.line, col=t.col)
 
         if self.at(";") and self.tok.kind == OP:
             self.advance()
@@ -1128,13 +1180,16 @@ class Parser:
             self.advance()
             expr = self.parse_unary()
             return ast.Unary(op=t.text, expr=expr, line=t.line, col=t.col)
-        if t.kind == IDENT and t.text in ("move", "forward") and not t.escaped_ident:
+        if t.kind == IDENT and t.text in ("move", "forward", "out") and not t.escaped_ident:
             nxt = self.peek(1)
             if nxt.kind == IDENT or nxt.text == "(" or nxt.text == "*":
                 self.advance()
                 expr = self.parse_unary()
-                cls = ast.Move if t.text == "move" else ast.Forward
-                return cls(expr=expr, line=t.line, col=t.col)
+                if t.text == "move":
+                    return ast.Move(expr=expr, line=t.line, col=t.col)
+                if t.text == "forward":
+                    return ast.Forward(expr=expr, line=t.line, col=t.col)
+                return ast.OutArg(expr=expr, line=t.line, col=t.col)
         return self.parse_postfix()
 
     def _next_token_starts_operand(self) -> bool:
@@ -1310,6 +1365,12 @@ class Parser:
                 expr = self.parse_expression(stop={")"})
                 self.expect(")")
                 return ast.SizeofPack(expr=expr, line=t.line, col=t.col)
+            if text == "unsafe" and not escaped and self.peek(1).text == "(":
+                self.advance()
+                self.expect("(")
+                inner = self.parse_expression(stop={")"})
+                self.expect(")", "')' after an unsafe expression")
+                return ast.UnsafeExpr(expr=inner, line=t.line, col=t.col)
             if text == "_" and not escaped:
                 self.advance()
                 return ast.Id(name="_", line=t.line, col=t.col)

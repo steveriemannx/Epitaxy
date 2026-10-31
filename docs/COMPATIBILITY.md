@@ -1,9 +1,10 @@
 # Cpp2 compatibility and deliberate deviations
 
 Epitaxy follows the *syntax requirements* of Cpp2 (as documented for cppfront),
-but it is an independent implementation with its own specification. This
-document records what Epitaxy 0.1 supports, where its semantics differ, and what
-is intentionally left out.
+but it is an independent implementation with its own specification. On top of
+the Cpp2 syntax it adds an **ownership and borrow checking extension** (§3.14).
+This document records what Epitaxy 0.2 supports, where its semantics differ, and
+what is intentionally left out.
 
 **Licensing note.** Epitaxy is MIT licensed. Cppfront is distributed under the
 Apache License 2.0 with the LLVM exception. No cppfront source code, test code
@@ -105,10 +106,14 @@ C++20.
 | `unchecked_*` opt-outs | supported | `narrow`, `cast`, `subscript`, `dereference`, `div`, `mod`, `cmp_less`, `cmp_equal` |
 | Automatic move from last use | conservative approximation | see §3.4 |
 | `[[nodiscard]]` on user functions | supported | generated for non-void returns |
+| `unique<T>` / `shared<T>` owning handles | **Epitaxy extension** | lowered to `std::unique_ptr` / `std::shared_ptr` |
+| `in T` / `inout T` borrow types (locals and returns) | **Epitaxy extension** | lowered to references; checked by the ownership pass |
+| Ownership/borrow/move checking | **Epitaxy extension** | on by default; `-no-ownership-checks` opts out; see §3.14 |
+| `unsafe` blocks, `unsafe(expr)` and `unsafe` functions | **Epitaxy extension** | raw-pointer boundary |
 
 ---
 
-## 2. Cpp2 features not implemented in 0.1
+## 2. Cpp2 features not implemented in 0.2
 
 These are parsed where the syntax is unambiguous, or rejected with a clear
 diagnostic where they are not:
@@ -119,6 +124,9 @@ diagnostic where they are not:
   metafunctions.
 * **Template-name and concept `is` queries** such as `x is std::vector` or
   `x is std::integral`.
+* **Rust-grade borrow checking**: Epitaxy has a conservative ownership/borrow
+  checker (§3.14), but not non-lexical lifetimes, lifetime polymorphism, data
+  race/`Send`/`Sync` analysis, or library-aware alias modelling.
 * **Modules**: no `import`/`export`.
 * **Mixed Cpp1/Cpp2 source.** Only preprocessor lines are passed through; you
   cannot put C++ declarations or C++ statement bodies in a `.ep` file.
@@ -185,7 +193,11 @@ The analysis is intentionally conservative and sound:
 * a returned local is not explicitly moved (C++ already implicitly moves it),
   but a returned `forward` parameter is forwarded.
 
-Explicit `move`/`forward` is always available.
+Explicit `move`/`forward` is always available. With ownership checking enabled,
+moves are also validated: moving from a borrowed place, moving twice, and using
+a moved value are errors. The automatic last-use move is suppressed for
+variables whose address is taken (and therefore for borrowed places), so it
+cannot invalidate a live borrow.
 
 ### 3.5 `operator=` and special members
 
@@ -244,6 +256,8 @@ objects with `is_active()` and `report_violation(std::string)`.
   generated `deref`.
 * Checks fire through the `epi::contract_group` objects, so they respect a
   replaced handler and can be disabled by deactivating the group.
+* Ownership/borrow/move/unsafe rules are checked statically before lowering and
+  are on by default; `-no-ownership-checks` disables them.
 
 ### 3.10 `main`
 
@@ -275,15 +289,55 @@ the C++ diagnostic mentions the generated file.
 
 ---
 
+### 3.14 The ownership and borrow checking extension
+
+This is the one deliberate **language extension** beyond Cpp2 syntax. Cpp2's
+`in`/`inout`/`out`/`copy`/`move`/`forward` parameter kinds are its ownership and
+borrow interface, but cppfront does not statically check moves, borrows or
+lifetimes. Epitaxy adds that checking, plus the minimum syntax needed to express
+it:
+
+* `unique<T>` — move-only owning handle (`std::unique_ptr`);
+* `shared<T>` — copyable shared owning handle (`std::shared_ptr`);
+* `in T` / `inout T` — shared / exclusive borrow types, usable for local
+  variables and return types (parameters continue to use `in`/`inout`/`out`);
+* `-> in(param) T` — explicit borrow source annotation for returns;
+* `unsafe { ... }`, `unsafe(expr)`, and `unsafe` functions — the boundary at
+  which raw pointers (`*T`) may be created and dereferenced;
+* `out x` at a call site — explicit out-argument marker.
+
+Checked rules (compile-time errors):
+
+1. use-after-move; double move; moving a borrowed place;
+2. borrowing a moved value; a borrow outliving its owner; borrowing a
+   temporary; borrow types as data members;
+3. shared/exclusive borrow conflicts on the same place; direct reads while an
+   exclusive borrow is live; direct writes/moves while any borrow is live;
+4. returning a borrow of a local or of an owned parameter; ambiguous borrow
+   returns without `in(param)`; `inout` returns from shared sources;
+5. copying `unique<T>` (transfer requires `(move x)` or a return);
+6. `inout`/`out` arguments that are not lvalues; aliased arguments with
+   conflicting borrows; `out` parameters not assigned on all paths;
+7. raw-pointer creation/dereference and calls to `unsafe` functions outside an
+   unsafe context;
+8. moving a variable declared outside the current loop inside the loop;
+9. function expressions capturing borrows, moved values or move-only values.
+
+Deliberate limitations: lexical borrow lifetimes (no NLL), no lifetime
+variables/generics, no `Send`/`Sync`, no data-race detection, and no modelling
+of C++ library aliasing (external calls are trusted; only explicit `move`
+arguments are tracked). The checker never rejects a program because of C++
+library internals it cannot see.
+
 ## 4. What "syntax requirement" means here
 
 The syntax implemented here is the Cpp2 surface syntax as publicly documented
-for cppfront (unified `name: kind = value` declarations, left-to-right types,
+for cppfront, plus the ownership extension described in §3.14 (unified `name: kind = value` declarations, left-to-right types,
 postfix unary operators, UFCS, `inspect`, `is`/`as`, contracts with `pre`/`post`/
 `assert`, string interpolation with `$`, `..<`/`..=`, `@` metafunctions, named
 `operator=` value operations, and so on). Where Cpp2's documented semantics
 depend on whole-program C++ type information or on cppfront's own reflection
-machinery — which Epitaxy 0.1 does not implement — this specification defines a
+machinery — which Epitaxy 0.2 does not implement — this specification defines a
 smaller, explicit behaviour rather than guessing, and the restriction is listed
 above.
 

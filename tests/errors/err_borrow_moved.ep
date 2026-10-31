@@ -1,0 +1,7 @@
+take: (move p: unique<i32>) -> i32 = { return p*; }
+
+main: () = {
+    a: unique<i32> = new<i32>(1);
+    _ = take(move a);
+    r: in i32 = a*&;
+}

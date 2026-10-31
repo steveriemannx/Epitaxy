@@ -1,0 +1,43 @@
+#include <iostream>
+#include <string>
+
+value_box: type = {
+    value: i32 = 0;
+
+    operator=: (out this, v: i32) = { value = v; }
+
+    get: (this) -> in(this) i32 = this.value&;
+
+    bump: (inout this) = {
+        this.value += 1;
+    }
+}
+
+add_to: (inout x: i32, amount: i32) = {
+    x += amount;
+}
+
+main: () = {
+    total := 10;
+    add_to(total, 5);
+    std::cout << "total=(total)$\n";
+
+    {
+        r: in i32 = total&;
+        std::cout << "shared view r=(r)$\n";
+    }
+
+    {
+        m: inout i32 = total&;
+        m += 1;
+        std::cout << "exclusive view m=(m)$\n";
+    }
+    std::cout << "total=(total)$\n";
+
+    box: value_box = (5);
+    box.bump();
+    std::cout << "box=(box.get())$\n";
+
+    view: in i32 = box.get();
+    std::cout << "view=(view)$\n";
+}

@@ -1,17 +1,19 @@
 #include <iostream>
 
-bump: (p: *i32) = {
+bump: unsafe (p: *i32) = {
     p* += 1;
 }
 
 main: () = {
     x := 41;
-    p: *i32 = x&;
-    bump(p);
-    std::cout << "x=(x)$ deref=(p*)$\n";
+    p: *i32 = unsafe(x&);
+    unsafe {
+        bump(p);
+    }
+    std::cout << "x=(x)$ deref=(unsafe(p*))$\n";
 
-    pp: * *i32 = p&;
-    std::cout << "double=(pp**)$\n";
+    pp: * *i32 = unsafe(p&);
+    std::cout << "double=(unsafe(pp**))$\n";
 
     q: *i32 = nullptr;
     if q == nullptr {

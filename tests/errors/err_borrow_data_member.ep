@@ -1,0 +1,8 @@
+holder: type = {
+    value: i32 = 0;
+    ref: in i32;
+}
+
+main: () = {
+    h: holder = ();
+}

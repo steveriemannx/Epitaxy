@@ -16,11 +16,14 @@ circle: type = {
     name: (override this) -> std::string = "circle";
 }
 
-poly_area: (s: *shape) -> double = s*.area();
+poly_area: unsafe (s: *shape) -> double = s*.area();
 
 main: () = {
     c: circle = (2.0);
     std::cout << "name: (c.name())$\n";
-    p: *shape = c&;
-    std::cout << "area: (poly_area(p))$\n";
+    p: *shape = unsafe(c&);
+    std::cout << "area: (unsafe(poly_area(p)))$\n";
+    if p is *circle {
+        std::cout << "dynamic type is circle\n";
+    }
 }

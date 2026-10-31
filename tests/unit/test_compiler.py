@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 from epitaxy import ast  # noqa: E402
 from epitaxy.codegen import CodeGen, Options  # noqa: E402
+from epitaxy.compiler import transpile  # noqa: E402
 from epitaxy.diag import CompileError  # noqa: E402
 from epitaxy.lexer import Lexer  # noqa: E402
 from epitaxy.parser import parse  # noqa: E402
@@ -195,7 +196,7 @@ class ParserTests(unittest.TestCase):
 
 class CodegenTests(unittest.TestCase):
     def generate(self, source: str) -> str:
-        return CodeGen(Options(), "t.ep").generate(parse(source, "t.ep"))
+        return transpile(source, "t.ep", Options())
 
     def test_escaped_contextual_keywords(self):
         cpp = self.generate(
@@ -250,6 +251,52 @@ class CodegenTests(unittest.TestCase):
     def test_rejected_metafunction(self):
         with self.assertRaises(CompileError):
             self.generate("flags: @flag_enum type = { a; b; }\nmain: () = { }")
+
+
+class OwnershipTests(unittest.TestCase):
+    def compile(self, source: str, options: Options | None = None) -> str:
+        return transpile(source, "t.ep", options or Options())
+
+    def test_borrow_return_lowers_to_reference(self):
+        cpp = self.compile(
+            "name: (in text: std::string) -> in std::string = { return text&; }\n"
+            "main: () = { }"
+        )
+        self.assertIn("std::string const& name", cpp)
+
+    def test_unique_lowers_to_unique_ptr(self):
+        cpp = self.compile("main: () = { p: unique<i32> = new<i32>(1); }")
+        self.assertIn("std::unique_ptr<i32> p", cpp)
+
+    def test_use_after_move_is_rejected(self):
+        with self.assertRaises(CompileError) as ctx:
+            self.compile(
+                "take: (move p: unique<i32>) -> i32 = { return p*; }\n"
+                "main: () = { a: unique<i32> = new<i32>(1); _ = take(move a); _ = a*; }"
+            )
+        self.assertIn("moved", ctx.exception.message)
+
+    def test_borrow_conflict_is_rejected(self):
+        with self.assertRaises(CompileError) as ctx:
+            self.compile("main: () = { x := 1; r: in i32 = x&; m: inout i32 = x&; }")
+        self.assertIn("borrowed", ctx.exception.message)
+
+    def test_dangling_borrow_return_is_rejected(self):
+        with self.assertRaises(CompileError) as ctx:
+            self.compile("f: () -> in i32 = { local := 1; return local&; }")
+        self.assertIn("local variable", ctx.exception.message)
+
+    def test_raw_pointer_needs_unsafe(self):
+        with self.assertRaises(CompileError) as ctx:
+            self.compile("main: () = { x := 1; p: *i32 = unsafe(x&); _ = p*; }")
+        self.assertIn("unsafe", ctx.exception.message)
+
+    def test_ownership_checks_can_be_disabled(self):
+        cpp = self.compile(
+            "main: () = { x := 1; p: *i32 = unsafe(x&); _ = p*; }",
+            Options(ownership_checks=False),
+        )
+        self.assertIn("int main", cpp)
 
 
 class CliTests(unittest.TestCase):

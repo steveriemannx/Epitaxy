@@ -14,7 +14,7 @@ main: () = {
     std::cout << "checked=(v[1])$\n";
     std::cout << "unchecked=(unchecked_subscript(v, 2))$\n";
 
-    ptr: *i32 = a&;
+    ptr: *i32 = unsafe(a&);
     std::cout << "deref=(unchecked_dereference(ptr))$\n";
     std::cout << "cmp=(unchecked_cmp_less(1, 2))$\n";
 }

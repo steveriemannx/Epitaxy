@@ -61,6 +61,14 @@ class DeducedType(Node):
 
 
 @dataclass(kw_only=True)
+class BorrowType(Node):
+    """A borrow type: ``in T`` (shared) or ``inout T`` (exclusive)."""
+
+    kind: str = "in"
+    inner: object = None
+
+
+@dataclass(kw_only=True)
 class FunctionType(Node):
     params: list = field(default_factory=list)
     returns: object = None
@@ -139,6 +147,8 @@ class Returns(Node):
     named: list = field(default_factory=list)  # list[NamedReturn]
     forward: bool = False
     forward_ref: bool = False
+    borrow_kind: Optional[str] = None  # in | inout | out for borrow returns
+    borrow_source: Optional[str] = None  # explicit source parameter name
 
 
 @dataclass(kw_only=True)
@@ -165,6 +175,7 @@ class FunctionDecl(Decl):
     operator: str = ""  # "=" for operator=
     access: Optional[str] = None  # public/private/protected at type scope
     is_declaration_only: bool = False
+    is_unsafe: bool = False
 
 
 @dataclass(kw_only=True)
@@ -310,6 +321,13 @@ class Assert(Node):
     message: object = None
     groups: list = field(default_factory=list)
     predicates: list = field(default_factory=list)
+
+
+@dataclass(kw_only=True)
+class UnsafeBlock(Node):
+    """``unsafe { ... }``: a scope in which raw-pointer operations are allowed."""
+
+    stmt: object = None
 
 
 @dataclass(kw_only=True)
@@ -505,6 +523,20 @@ class PackExpansion(Expr):
 
 @dataclass(kw_only=True)
 class Parenthesized(Expr):
+    expr: object = None
+
+
+@dataclass(kw_only=True)
+class UnsafeExpr(Expr):
+    """``unsafe(expr)``: an expression evaluated in an unsafe context."""
+
+    expr: object = None
+
+
+@dataclass(kw_only=True)
+class OutArg(Expr):
+    """``f(out x)``: mark an argument as written by the callee."""
+
     expr: object = None
 
 

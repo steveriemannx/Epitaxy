@@ -42,9 +42,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from epitaxy.codegen import CodeGen, Options  # noqa: E402
+from epitaxy.codegen import Options  # noqa: E402
+from epitaxy.compiler import transpile as compile_source  # noqa: E402
 from epitaxy.diag import CompileError  # noqa: E402
-from epitaxy.parser import parse  # noqa: E402
 
 CASES_DIR = ROOT / "tests" / "cases"
 ERRORS_DIR = ROOT / "tests" / "errors"
@@ -77,6 +77,8 @@ def options_from_flags(flags: list[str]) -> Options:
             opts.div_checks = False
         elif flag == "-no-comparison-checks":
             opts.sign_checks = False
+        elif flag == "-no-ownership-checks":
+            opts.ownership_checks = False
         else:
             raise SystemExit(f"error: unknown compiler flag in .flags file: {flag}")
     return opts
@@ -84,8 +86,7 @@ def options_from_flags(flags: list[str]) -> Options:
 
 def transpile(path: Path, options: Options):
     source = path.read_text(encoding="utf-8")
-    tu = parse(source, str(path))
-    return CodeGen(options, str(path)).generate(tu)
+    return compile_source(source, str(path), options)
 
 
 def compile_cpp(cpp: str, name: str, cxx: str, workdir: Path, keep: bool):

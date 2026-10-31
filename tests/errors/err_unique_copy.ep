@@ -1,0 +1,4 @@
+main: () = {
+    a: unique<i32> = new<i32>(1);
+    b: unique<i32> = a;
+}

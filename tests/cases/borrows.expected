@@ -1,0 +1,6 @@
+total=15
+shared view r=15
+exclusive view m=16
+total=16
+box=6
+view=6
