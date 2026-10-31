@@ -67,6 +67,12 @@ class LexerTests(unittest.TestCase):
         tokens = [t for t in Lexer(r'"cost \$ and (x)"').tokenize() if t.kind == "string"]
         self.assertEqual(len(tokens[0].parts), 1)
 
+    def test_cpp1_raw_block(self):
+        tokens = Lexer('cpp1 { struct S { int a; }; /* } */ }\nx').tokenize()
+        self.assertEqual(tokens[0].kind, "cpp1")
+        self.assertIn("struct S", tokens[0].text)
+        self.assertEqual(tokens[1].text, "x")
+
     def test_identifier_escape(self):
         tokens = Lexer("__identifier__struct").tokenize()
         self.assertEqual(tokens[0].text, "struct")
@@ -312,6 +318,26 @@ class OwnershipTests(unittest.TestCase):
         with self.assertRaises(CompileError) as ctx:
             self.compile("main: () = { x := 1; p: *i32 = unsafe(x&); _ = p*; }")
         self.assertIn("unsafe", ctx.exception.message)
+
+    def test_cpp1_block_is_passed_through(self):
+        cpp = self.compile(
+            "cpp1 { inline int raw_add(int a, int b) { return a + b; } }\n"
+            'main: () = { std::cout << raw_add(1, 2); }'
+        )
+        self.assertIn("inline int raw_add", cpp)
+
+    def test_default_prelude_includes_stdlib(self):
+        cpp = self.compile("main: () = { }")
+        self.assertIn("#include <vector>", cpp)
+        self.assertIn("#include <map>", cpp)
+
+    def test_no_prelude_option(self):
+        cpp = transpile("main: () = { }", "t.ep", Options(preload_std=False))
+        self.assertNotIn("#include <vector>", cpp)
+
+    def test_prelude_does_not_duplicate_user_includes(self):
+        cpp = self.compile("#include <vector>\nmain: () = { }")
+        self.assertEqual(cpp.count("#include <vector>"), 1)
 
     def test_ownership_checks_can_be_disabled(self):
         cpp = self.compile(

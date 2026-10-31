@@ -1,0 +1,36 @@
+#include <iostream>
+
+cpp1 {
+    struct raw_point {
+        int x = 0;
+        int y = 0;
+    };
+
+    inline int raw_add(int a, int b) { return a + b; }
+}
+
+box: type = {
+    value: i32 = 0;
+
+    cpp1 {
+        int raw_member = 7;
+    }
+
+    sum: (this) -> i32 = value + raw_member;
+}
+
+main: () = {
+    p: raw_point = ();
+    p.x = 3;
+    p.y = 4;
+    std::cout << "raw struct: " << p.x << "," << p.y << "\n";
+    std::cout << "raw function: " << raw_add(2, 3) << "\n";
+
+    b: box = ();
+    b.value = 10;
+    std::cout << "raw member: " << b.sum() << "\n";
+
+    cpp1 {
+        std::cout << "raw statement: " << (p.x + p.y) << "\n";
+    }
+}

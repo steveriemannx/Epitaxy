@@ -1069,6 +1069,8 @@ class Checker:
             finally:
                 env.unsafe -= 1
             return
+        if isinstance(stmt, ast.Cpp1Block):
+            return  # raw C++ is opaque to the ownership checker
         if isinstance(stmt, ast.ExprStmt):
             self.check_expr(stmt.expr, env)
             return

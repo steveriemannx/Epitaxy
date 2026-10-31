@@ -37,11 +37,12 @@ Hello, world!
 - **Ownership and borrowing** — `unique<T>` and `shared<T>` owning handles,
   `in T` / `inout T` borrows, move checking, and an explicit `unsafe` boundary
   for raw pointers.
-- **C++ ecosystem, no bindings** — include C++ headers with `#include` and use
-  C++ types, functions and objects directly. The output is ordinary C++20 with
-  the same ABI, so there is no FFI/binding layer. (See the
-  [interop model](#interop-model): Epitaxy is a new language, not a C++ syntax
-  mode.)
+- **C++ ecosystem, no bindings** — use C++ types, functions and objects
+  directly; a curated set of C++ standard headers is pre-included by default
+  (`-no-prelude` opts out), and `cpp1 { ... }` blocks pass raw C++ through when
+  you need it. The output is ordinary C++20 with the same ABI, so there is no
+  FFI/binding layer. (See the [interop model](#interop-model): Epitaxy is a new
+  language, not a C++ syntax mode.)
 
 ## Status
 
@@ -251,6 +252,7 @@ usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
 | `--print-cpp` | also print the generated C++ to standard error |
 | `-q` | suppress informational messages |
 | `-no-*-checks` | disable a default-on safety check (`name`, `null`, `div-zero`, `comparison`, `ownership`) |
+| `-no-prelude` | do not pre-include the curated C++ standard-library headers |
 | `--version` | print the compiler version |
 
 Environment variables: `CXX` selects the C++ compiler and `CXXFLAGS` adds extra
@@ -313,10 +315,19 @@ CXX=clang++ python3 tests/run_tests.py
 
 ## Interop model
 
-Epitaxy is a **new language**, not a "C++ syntax mode", so **mixed Cpp1/Cpp2
-source files are an explicit non-goal**. Interop works at the header/library
-level:
+Epitaxy is a **new language**, not a "C++ syntax mode", so **implicit
+Cpp1/Cpp2 mixing is an explicit non-goal**. Interop works at the
+header/library level, plus two pragmatic escape hatches:
 
+* By default the compiler pre-includes a curated set of C++ standard headers
+  (`<vector>`, `<map>`, `<algorithm>`, `<numeric>`, `<chrono>`, `<format>`,
+  `<iostream>`, …), so the standard library is available without writing
+  `#include`. Use `-no-prelude` to turn this off and include exactly what you
+  need.
+* `cpp1 { ... }` blocks pass raw C++ through verbatim (at namespace scope, type
+  scope, or statement scope). This is for constructs that cannot be expressed in
+  Epitaxy (C++ macros, pointer-to-members, complex templates, …). Raw blocks are
+  opaque to the ownership checker; keep them small and at the boundary.
 * `#include` any C++ header; call its functions and use its types directly. This
   includes the standard library, third-party libraries and in-house C++ code.
 * Epitaxy lowers to ordinary C++20, so exceptions, allocators, ABI, calling
@@ -340,6 +351,10 @@ of `<algorithm>`, `<map>`, `<numeric>`, `<optional>`, `<variant>`, `<chrono>`,
   C++ libraries, threads/data races or `Send`/`Sync`.
 * Calls into C++ are trusted as safe unless they are declared `unsafe` in
   Epitaxy; raw pointer operations are gated by `unsafe`.
+* `cpp1 { ... }` blocks are raw C++ and are not analysed by the ownership
+  checker (they are an explicit escape hatch). The default C++ prelude is
+  convenience, not a semantic layer: C++ headers are still resolved by the host
+  C++ compiler.
 * Versus Cpp2, the largest missing pieces are: reflection and user-defined
   metafunctions (`@union`, `@print`, `@regex`, `@autodiff` and custom
   metafunctions are absent); the full

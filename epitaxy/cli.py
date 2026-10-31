@@ -103,6 +103,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="disable default-on ownership/borrow checking",
     )
+    parser.add_argument(
+        "-no-prelude",
+        dest="preload_std",
+        action="store_false",
+        help="do not pre-include the C++ standard-library headers",
+    )
     parser.add_argument("--version", action="version", version=f"Epitaxy {__version__} (MIT)")
     return parser
 
@@ -128,6 +134,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         div_checks=args.div_checks,
         sign_checks=args.sign_checks,
         ownership_checks=args.ownership_checks,
+        preload_std=args.preload_std,
     )
 
     files = [Path(f) for f in args.files]

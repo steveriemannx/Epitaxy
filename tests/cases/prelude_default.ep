@@ -1,0 +1,16 @@
+main: () = {
+    words: std::vector<std::string> = ("pear", "apple", "plum");
+    words.std::ranges::sort();
+
+    counts: std::map<std::string, i32> = ();
+    for words do (word) {
+        counts[word] += 1;
+    }
+
+    nums: std::vector<i32> = (1, 2, 3, 4);
+    total := std::accumulate(nums.begin(), nums.end(), 0);
+
+    duration := std::chrono::milliseconds(42);
+    std::cout << "sorted=" << words[0] << " count=" << counts["apple"]
+              << " sum=" << total << " ms=" << duration.count() << "\n";
+}

@@ -2,7 +2,7 @@
 
 Epitaxy follows the *syntax requirements* of Cpp2 (as documented for cppfront),
 but it is an independent implementation with its own specification. On top of
-the Cpp2 syntax it adds an **ownership and borrow checking extension** (§3.14).
+the Cpp2 syntax it adds an **ownership and borrow checking extension** (§3.14) and explicit C++ escape hatches (`cpp1 { ... }`, default prelude).
 This document records what Epitaxy 0.2 supports, where its semantics differ, and
 what is intentionally left out.
 
@@ -33,6 +33,8 @@ C++20.
 | Template parameters `<T: type, N: i32, Ts...: type>` with defaults | supported | |
 | `requires` constraints | supported | |
 | `using` declarations and `using ns::_;` namespace imports | supported | |
+| `cpp1 { ... }` raw C++ blocks (namespace/type/statement scope) | supported | Epitaxy escape hatch; opaque to the ownership checker |
+| default C++ standard-library prelude | supported | curated `#include` set, disabled with `-no-prelude` |
 | `#include`/preprocessor lines | supported (passed through) | |
 | `__identifier__keyword` escaped identifiers | supported | |
 | `@metafunction` type declarations | partial — see §4 | 8 built-in metafunctions |
@@ -124,7 +126,9 @@ The short list is:
   metafunctions, and only the built-in metafunctions (`@value`, `@copyable`,
   `@interface`, `@enum`, `@flag_enum`, the ordered family, `@basic_value`,
   `@singleton`).
-* **Mixed Cpp1/Cpp2 source**: only preprocessor lines are passed through.
+* **Implicit mixed Cpp1/Cpp2 source**: only preprocessor lines and explicit
+  `cpp1 { ... }` blocks are passed through; C++ declarations/statements cannot be
+  freely interleaved.
 * **Modules / multi-file builds**: none.
 * **Full `is`/`as`**: no template-name, concept or value-predicate queries; no
   `std::expected` or user customization.
@@ -350,15 +354,16 @@ the one place where Epitaxy goes *beyond* Cpp2: ownership/borrow checking.)
    Missing: `@union`, `@regex`, `@autodiff`, `@print`, and any way to customize
    (suppress or extend) the members a metafunction generates.
 
-2. **Mixed Cpp1/Cpp2 source (intentional non-goal).** Only preprocessor lines
-   are passed through. A `.ep` file cannot contain raw C++ declarations,
-   statements or expressions. This is a deliberate design choice: Epitaxy is a
-   new language, and C++ interop happens at the header/library level instead
-   (`#include` any header, call its functions, use its types; generated code is
-   ordinary C++ with no bindings layer). Raw-pointer C++ APIs cross an explicit
-   `unsafe` boundary. Calling Epitaxy from another C++ translation unit
-   currently requires a hand-written header; generated interface headers
-   (`--emit-header`) are future work.
+2. **Implicit mixed Cpp1/Cpp2 source (intentional non-goal).** A `.ep` file
+   cannot freely interleave C++ declarations, statements and expressions with
+   Cpp2 code. Two explicit escape hatches are provided instead: `cpp1 { ... }`
+   blocks pass raw C++ through verbatim at namespace, type or statement scope,
+   and the default C++ standard-library prelude removes the need for most
+   `#include` lines. Raw C++ blocks are opaque to the ownership checker and are
+   emitted before Epitaxy type definitions and globals. This keeps Epitaxy a new
+   language rather than a C++ syntax mode; C++ interop otherwise happens at the
+   header/library level.
+
 3. **Modules.** No `import`/`export`, no `-import-std`, no multi-file
    compilation: one translation unit at a time.
 4. **The full `is` / `as` query system.**
@@ -428,6 +433,11 @@ metafunction family, `@flag_enum`, `@singleton`, `@basic_value` and the
 `@*_ordered_value` combinations are implemented; `@value` now also generates
 memberwise `operator==`; qualified names with template arguments on inner
 segments (e.g. `std::numeric_limits<double>::quiet_NaN()`) are accepted.
+
+In 0.4.0: `cpp1 { ... }` raw C++ blocks (namespace/type/statement scope) and a
+default curated C++ standard-library prelude (`-no-prelude` to disable) were
+added as explicit interop escape hatches; this does not enable implicit mixed
+source mode.
 
 ## 5. What "syntax requirement" means here
 

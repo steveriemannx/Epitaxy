@@ -51,6 +51,11 @@ Non-goals for 0.2:
  executable
 ```
 
+The generated file starts with the user's preprocessor lines, then (unless
+`-no-prelude`) a curated C++ standard-library prelude, then `epi_support.hpp` and
+the lowered program. The prelude is a convenience layer only; C++ headers are
+resolved by the host compiler.
+
 The compiler is a pure Python package with no third-party dependencies, so it
 runs anywhere Python 3.10+ runs. Generated programs need only a C++20 compiler
 and the bundled `epi_support.hpp`.
@@ -72,6 +77,9 @@ test harness use it, so the default-on checks apply everywhere.
   point when followed by an identifier (so `123.u8()` is a UFCS call, not a
   user-defined literal) or by another `.` (so `1..<10` lexes as `1 ..< 10`).
 * `#`-lines are captured as single `PREPROC` tokens with line continuations.
+* `cpp1 { ... }` is captured as a single raw `CPP1` token. The scanner balances
+  braces while skipping C++ string/character literals, raw strings, `//` and
+  `/* */` comments, so brace characters inside C++ text do not end the block.
 
 ## Parser
 
@@ -120,12 +128,16 @@ passes, each of which recurses into namespaces:
 5. **Forward prototypes** — declarations for functions whose return type is not
    deduced (C++ cannot declare an `auto`/`decltype(auto)` function without its
    body).
-6. **Type definitions** — classes, members, nested types, special members,
+6. **Raw C++ pass** — top-level `cpp1 { ... }` blocks are emitted after the
+   forward declarations and before type definitions, in source order (recursing
+   into namespaces). Raw blocks get the current indentation applied, with common
+   leading whitespace removed.
+7. **Type definitions** — classes, members, nested types, special members,
    metafunction expansion.
-7. **Named-return struct definitions** — after the user types they mention.
-8. **Global objects** — namespace-scope variable definitions (before functions,
+8. **Named-return struct definitions** — after the user types they mention.
+9. **Global objects** — namespace-scope variable definitions (before functions,
    so function bodies can use them).
-9. **Function definitions** — deduced-return functions first, then the rest, so
+10. **Function definitions** — deduced-return functions first, then the rest, so
    the common "helper defined below the caller" pattern works.
 
 Notes on specific lowerings:

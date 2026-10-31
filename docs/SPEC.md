@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.3 (draft)**
+**Version 0.4 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -68,6 +68,14 @@ the generated C++ file, in source order. This is how C++ headers are included:
 
 Preprocessor lines are also accepted inside blocks and type bodies, where they
 are copied at that position.
+
+**Default prelude.** Unless `-no-prelude` is given, the compiler emits a curated
+set of standard C++ header inclusions (algorithm, any, array, chrono, compare,
+concepts, cstddef, cstdint, cstdlib, format, functional, iostream, iterator,
+map, memory, numeric, optional, ranges, set, sstream, stdexcept, string,
+string_view, type_traits, unordered_map, utility, variant, vector) before the
+program's own includes. This is a convenience prelude; it does not change the
+language and it can be disabled per translation unit.
 
 ### 2.4 Identifiers
 
@@ -260,7 +268,25 @@ using namespace std::chrono_literals;  // C++ spelling also accepted
 
 The `namespace::_` form is lowered to `using namespace namespace;`.
 
-### 3.8 Unnamed declarations
+### 3.8 Raw C++ blocks
+
+A `cpp1 { ... }` block passes its contents through verbatim as C++:
+
+```cpp2
+cpp1 {
+    struct raw_point { int x = 0; int y = 0; };
+    inline int raw_add(int a, int b) { return a + b; }
+}
+```
+
+Raw C++ blocks are accepted at namespace scope (emitted in source order among
+type definitions, after Epitaxy forward declarations), as type members, and as
+statements inside function bodies. They are opaque to the ownership checker and
+are intended as an escape hatch for C++ constructs that Epitaxy cannot express.
+Top-level raw C++ is emitted before Epitaxy type definitions and globals, so
+declare raw C++ types before Epitaxy declarations that use them by value.
+
+### 3.9 Unnamed declarations
 
 Inside an expression, a declaration may omit its name (the declaration then
 starts with `:`):
@@ -702,6 +728,7 @@ statement := block
            | label ":" while/do/for statement
            | "(" parameter ")" statement
            | "unsafe" block
+           | "cpp1" block
 ```
 
 ### 7.1 Blocks
@@ -794,7 +821,12 @@ lowered to `catch (...)`.
 functions declared `unsafe`), raw pointers may be created and dereferenced; see
 section 11.
 
-### 7.7 Discarding values
+### 7.7 Raw C++ statements
+
+`cpp1 { ... }` inside a function body passes the enclosed text through as C++
+statements.
+
+### 7.8 Discarding values
 
 `_ = expression;` evaluates an expression and explicitly discards its value.
 This is required for `[[nodiscard]]` functions.
@@ -1170,6 +1202,11 @@ The checks can be disabled for a translation unit with `-no-ownership-checks`.
   containing `#include "epi_support.hpp"` plus the lowered program.
 * All preprocessor lines in the file are emitted at the top of the generated
   file, in source order.
+* By default a curated C++ standard-library prelude is included; `-no-prelude`
+  disables it. C++ headers are still compiled by the host C++ compiler.
+* `cpp1 { ... }` blocks (namespace, type or statement scope) are emitted
+  verbatim; they are opaque to the ownership checker and are an explicit escape
+  hatch, not a mixed-source mode.
 * C++ names may be used directly: `std::vector`, `std::ranges::sort`,
   `std::cout`, `std::any`, and so on. C++20 CTAD, `[[nodiscard]]`, concepts and
   ranges are available.

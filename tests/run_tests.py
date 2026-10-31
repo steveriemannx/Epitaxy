@@ -79,6 +79,8 @@ def options_from_flags(flags: list[str]) -> Options:
             opts.sign_checks = False
         elif flag == "-no-ownership-checks":
             opts.ownership_checks = False
+        elif flag == "-no-prelude":
+            opts.preload_std = False
         else:
             raise SystemExit(f"error: unknown compiler flag in .flags file: {flag}")
     return opts

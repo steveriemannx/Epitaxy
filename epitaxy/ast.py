@@ -105,6 +105,13 @@ class Preproc(Node):
 
 
 @dataclass(kw_only=True)
+class Cpp1Block(Node):
+    """Verbatim C++ code: ``cpp1 { ... }``."""
+
+    text: str = ""
+
+
+@dataclass(kw_only=True)
 class UsingDecl(Node):
     target: str
     is_namespace: bool = False

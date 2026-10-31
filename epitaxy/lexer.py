@@ -30,6 +30,7 @@ CHAR = "char"
 OP = "op"
 AT = "at"
 PREPROC = "preproc"
+CPP1 = "cpp1"
 EOF = "eof"
 
 # Longest operators first so that greedy matching works.
@@ -215,6 +216,7 @@ class Lexer:
                 continue
             if self._is_ident_start(ch):
                 self._scan_ident()
+                self._maybe_scan_cpp1_block(line, col)
                 continue
             for op in _OPERATORS:
                 if self.startswith(op):
@@ -279,6 +281,72 @@ class Lexer:
                 escaped = True
                 break
         self.tokens.append(Token(kind=IDENT, text=text, line=line, col=col, escaped_ident=escaped))
+
+    def _maybe_scan_cpp1_block(self, line: int, col: int) -> bool:
+        """Turn ``cpp1 { ... }`` into a raw C++ block token."""
+        token = self.tokens[-1]
+        if token.kind != IDENT or token.text != "cpp1" or token.escaped_ident:
+            return False
+        save_pos, save_line, save_col = self.pos, self.line, self.col
+        while self.peek() in " \t\r\n\f\v":
+            self.advance()
+        if self.peek() != "{":
+            self.pos, self.line, self.col = save_pos, save_line, save_col
+            return False
+        self.tokens.pop()
+        self._scan_cpp1_block(line, col, token)
+        return True
+
+    def _scan_cpp1_block(self, line: int, col: int, ident_token: Token) -> None:
+        start = self.pos
+        if self.peek() != "{":
+            raise self.error("expected '{' to begin a 'cpp1' block", start)
+        self.advance()  # opening brace
+        content_start = self.pos
+        depth = 1
+        while self.pos < self.n:
+            ch = self.peek()
+            if ch == '"':
+                nxt = self._skip_quoted_at(self.pos)
+                if nxt is None:
+                    raise self.error("unterminated string literal inside a 'cpp1' block", self.pos)
+                self.advance(nxt - self.pos)
+                continue
+            if ch == "'":
+                nxt = self._skip_char_at(self.pos)
+                if nxt is None:
+                    raise self.error("unterminated character literal inside a 'cpp1' block", self.pos)
+                self.advance(nxt - self.pos)
+                continue
+            if ch == "/" and self.peek(1) == "/":
+                while self.pos < self.n and self.peek() != "\n":
+                    self.advance()
+                continue
+            if ch == "/" and self.peek(1) == "*":
+                self.advance(2)
+                while self.pos < self.n and not (self.peek() == "*" and self.peek(1) == "/"):
+                    self.advance()
+                if self.pos >= self.n:
+                    raise self.error("unterminated comment inside a 'cpp1' block", start)
+                self.advance(2)
+                continue
+            if ch == "{":
+                depth += 1
+                self.advance()
+                continue
+            if ch == "}":
+                depth -= 1
+                if depth == 0:
+                    content = self.src[content_start:self.pos]
+                    self.advance()
+                    self.tokens.append(
+                        Token(kind=CPP1, text=content, line=line, col=col)
+                    )
+                    return
+                self.advance()
+                continue
+            self.advance()
+        raise self.error("unterminated 'cpp1' block", start)
 
     # -- numbers ------------------------------------------------------------
 

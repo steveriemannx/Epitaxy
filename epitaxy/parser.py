@@ -16,6 +16,7 @@ from .diag import CompileError
 from .lexer import (
     AT,
     CHAR,
+    CPP1,
     EOF,
     IDENT,
     NUMBER,
@@ -163,6 +164,10 @@ class Parser:
                 t = self.advance()
                 items.append(ast.Preproc(text=t.text, line=t.line, col=t.col))
                 continue
+            if self.kind() == CPP1:
+                t = self.advance()
+                items.append(ast.Cpp1Block(text=t.text, line=t.line, col=t.col))
+                continue
             items.append(self.parse_declaration(scope="namespace"))
         return ast.TranslationUnit(items=items, line=start.line, col=start.col)
 
@@ -178,6 +183,9 @@ class Parser:
         if self.kind() == PREPROC:
             t = self.advance()
             return ast.Preproc(text=t.text, line=t.line, col=t.col)
+        if self.kind() == CPP1:
+            t = self.advance()
+            return ast.Cpp1Block(text=t.text, line=t.line, col=t.col)
 
         if self.at_ident("using"):
             return self.parse_using()
@@ -876,6 +884,10 @@ class Parser:
         if t.kind == PREPROC:
             self.advance()
             return ast.Preproc(text=t.text, line=t.line, col=t.col)
+
+        if t.kind == CPP1:
+            self.advance()
+            return ast.Cpp1Block(text=t.text, line=t.line, col=t.col)
 
         if self.at("{"):
             return self.parse_block()
