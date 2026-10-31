@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.5 (draft)**
+**Version 0.6 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -1065,7 +1065,7 @@ default report-and-terminate handler, `set_handler` replaces it and
 
 ## 10. Safety
 
-Epitaxy 0.5 has two safety levels; the precise contract is documented in
+Epitaxy 0.6 has two safety levels; the precise contract is documented in
 [`SAFETY.md`](SAFETY.md).
 
 * **Default** — the checks below are on by default and may be disabled.
@@ -1137,8 +1137,14 @@ parameter, `this`, or a member/deref chain of one):
   moved directly.
 * `out` parameters are exclusive borrows that must be assigned before the
   function returns.
-* A borrow may not outlive its owner. A local borrow lives from its declaration
-  to the end of its scope (lexical lifetimes; no NLL).
+* A borrow may not outlive its owner. Local borrows have **non-lexical
+  lifetimes**: a borrow is live until its last use and ends there, so the owner
+  can be mutated or moved afterwards while the borrow is never used again. An
+  unused borrow ends immediately. A borrow keeps its lexical lifetime when it
+  may escape (stored in an aggregate, captured by a function expression, passed
+  to code the checker cannot see) or when it is used inside a loop nested
+  deeper than its declaration, because its liveness then crosses loop
+  iterations.
 * A borrow cannot be moved, captured by a function expression, or stored in a
   data member.
 * Borrowing a temporary is an error.
@@ -1196,7 +1202,8 @@ Calling an `unsafe` function outside an unsafe context is an error.
 The checker is deliberately conservative and sound for the constructs it
 models:
 
-* lexical borrow lifetimes, no NLL and no lifetime polymorphism beyond
+* non-lexical borrow lifetimes for non-escaping, non-loop-crossing borrows;
+  conservative lexical lifetimes otherwise; no lifetime polymorphism beyond
   `-> in(param) T`;
 * reads of a place while an exclusive borrow is live are rejected; writes/moves
   while any borrow is live are rejected; reading a place while only shared

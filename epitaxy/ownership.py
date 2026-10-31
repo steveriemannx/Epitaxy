@@ -244,16 +244,22 @@ class LocalState:
         self.initialized = param_kind != "out"
 
 
-class Borrow:
-    __slots__ = ("root", "path", "kind", "holder", "depth", "node")
+INF_POS = 1 << 60
 
-    def __init__(self, root, path, kind, holder, depth, node):
+
+class Borrow:
+    __slots__ = ("root", "path", "kind", "holder", "depth", "node", "end")
+
+    def __init__(self, root, path, kind, holder, depth, node, end=None):
         self.root = root
         self.path = path
         self.kind = kind
         self.holder = holder
         self.depth = depth
         self.node = node
+        # Non-lexical lifetime: program point after which the borrow is dead.
+        # INF_POS means "keep the borrow until the end of its lexical scope".
+        self.end = INF_POS if end is None else end
 
 
 def _overlap(a: tuple, b: tuple) -> bool:
@@ -276,6 +282,12 @@ class Env:
         self.loop_depth = 0
         self.unsafe = 1 if func.is_unsafe else 0
         self.scope_stack: list[list[str]] = [[]]
+        self.pos = 0
+
+    def prune(self, pos: int) -> None:
+        """Drop borrows whose non-lexical lifetime ended before ``pos``."""
+        if self.borrows:
+            self.borrows = [b for b in self.borrows if b.end >= pos]
 
     def push_scope(self):
         self.depth += 1
@@ -308,6 +320,10 @@ class Checker:
         self.filename = filename
         self.enabled = enabled
         self.strict = strict
+        self._liveness: dict[str, tuple[int, int, bool]] = {}
+        self._stmt_pos: dict[int, int] = {}
+        self._pos_counter = 0
+        self._scan_loop_depth = 0
 
     # -- diagnostics ----------------------------------------------------
 
@@ -1049,6 +1065,10 @@ class Checker:
             self.check_stmt(stmt, env)
 
     def check_stmt(self, stmt, env: Env) -> None:
+        pos = self._stmt_pos.get(id(stmt))
+        if pos is not None:
+            env.pos = pos
+            env.prune(pos)
         if isinstance(stmt, ast.Block):
             env.push_scope()
             try:
@@ -1330,7 +1350,12 @@ class Checker:
         local.borrow_kind = kind
         local.borrow_root = root
         local.borrow_path = path
-        env.borrows.append(Borrow(root, path, kind, decl.name, env.depth, decl))
+        env.borrows.append(
+            Borrow(
+                root, path, kind, decl.name, env.depth, decl,
+                end=self._borrow_end(decl.name, env),
+            )
+        )
         self.info.borrow_names.setdefault(id(env.func), set()).add(decl.name)
 
     def validate_borrow_root(self, root: str, path: tuple, kind: str, env: Env, node) -> None:
@@ -1477,9 +1502,211 @@ class Checker:
 
     # -- functions -------------------------------------------------------
 
+    # -- non-lexical lifetimes -------------------------------------------
+
+    def _borrow_end(self, holder: str, env: Env) -> int:
+        info = self._liveness.get(holder)
+        if info is None:
+            # The borrow is never used: like Rust's NLL, its region ends here.
+            return env.pos
+        last_use, max_loop_depth, escaping = info
+        if escaping or max_loop_depth > env.loop_depth:
+            return INF_POS
+        return max(last_use, env.pos)
+
+    def _known_safe_callee(self, callee) -> bool:
+        """True if the callee is an Epitaxy free function (never retains borrows)."""
+        if isinstance(callee, ast.NameExpr) and len(callee.name.parts) == 1:
+            return callee.name.parts[0] in self.tables.free_functions
+        return False
+
+    def _record_use(self, name: str, escape: bool) -> None:
+        if not name or name == "_":
+            return
+        last, depth, esc = self._liveness.get(name, (0, 0, False))
+        self._liveness[name] = (
+            max(last, self._pos_counter),
+            max(depth, self._scan_loop_depth),
+            esc or escape,
+        )
+
+    def _scan_generic(self, value, escape: bool) -> None:
+        if value is None:
+            return
+        if isinstance(value, ast.Expr):
+            self._scan_expr(value, escape)
+            return
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                self._scan_generic(item, escape)
+            return
+        if isinstance(value, ast.Node):
+            for field_value in ast_dataclass_values(value):
+                self._scan_generic(field_value, escape)
+
+    def _scan_expr(self, expr, escape: bool) -> None:
+        if expr is None:
+            return
+        if isinstance(expr, ast.NameExpr):
+            if len(expr.name.parts) == 1 and not expr.name.leading_global:
+                self._record_use(expr.name.parts[0], escape)
+            return
+        if isinstance(expr, ast.Id):
+            self._record_use(expr.name, escape)
+            return
+        if isinstance(expr, ast.Literal):
+            return
+        if isinstance(expr, ast.StringLiteral):
+            for part in expr.parts:
+                if isinstance(part, ast.StrInterp):
+                    self._scan_expr(part.expr, escape)
+            return
+        if isinstance(expr, ast.Parenthesized):
+            self._scan_expr(expr.expr, escape)
+            return
+        if isinstance(expr, ast.Lambda):
+            # Captured names may outlive this function: always escaping.
+            for name in _captured_names(expr):
+                self._record_use(name, True)
+            return
+        if isinstance(expr, ast.Call):
+            known = self._known_safe_callee(expr.callee)
+            self._scan_expr(expr.callee, True)
+            for arg in expr.args:
+                self._scan_expr(arg, escape or not known)
+            return
+        if isinstance(expr, ast.Member):
+            self._scan_expr(expr.obj, escape)
+            return
+        if isinstance(expr, ast.Subscript):
+            self._scan_expr(expr.obj, escape)
+            self._scan_expr(expr.index, escape)
+            return
+        if isinstance(expr, ast.Postfix):
+            self._scan_expr(expr.expr, True if expr.op == "&" else escape)
+            return
+        if isinstance(expr, ast.Unary):
+            self._scan_expr(expr.expr, escape)
+            return
+        if isinstance(expr, ast.Binary):
+            self._scan_expr(expr.left, escape)
+            self._scan_expr(expr.right, escape)
+            return
+        if isinstance(expr, ast.CompareChain):
+            self._scan_expr(expr.first, escape)
+            for _op, operand in expr.rest:
+                self._scan_expr(operand, escape)
+            return
+        if isinstance(expr, ast.Assign):
+            self._scan_expr(expr.lhs, False)
+            self._scan_expr(expr.rhs, True)
+            return
+        if isinstance(expr, ast.New):
+            for arg in expr.args:
+                self._scan_expr(arg, True)
+            return
+        if isinstance(expr, (ast.Move, ast.Forward, ast.OutArg, ast.UnsafeExpr)):
+            self._scan_expr(expr.expr, True)
+            return
+        if isinstance(expr, ast.StrInterp):
+            self._scan_expr(expr.expr, True)
+            return
+        # Unknown expression forms are conservatively treated as escaping.
+        for value in ast_dataclass_values(expr):
+            self._scan_generic(value, True)
+
+    def _scan_stmt(self, stmt, escape: bool = False) -> None:
+        if stmt is None:
+            return
+        self._pos_counter += 1
+        self._stmt_pos[id(stmt)] = self._pos_counter
+        if isinstance(stmt, ast.Block):
+            for item in stmt.stmts:
+                self._scan_stmt(item)
+            return
+        if isinstance(stmt, ast.UnsafeBlock):
+            self._scan_stmt(stmt.stmt)
+            return
+        if isinstance(stmt, ast.If):
+            self._scan_expr(stmt.cond, False)
+            self._scan_stmt(stmt.then, escape)
+            self._scan_stmt(stmt.else_, escape)
+            return
+        if isinstance(stmt, ast.While):
+            self._scan_expr(stmt.cond, False)
+            self._scan_loop_depth += 1
+            self._scan_stmt(stmt.body)
+            self._scan_loop_depth -= 1
+            self._scan_expr(getattr(stmt, "next_expr", None), False)
+            return
+        if isinstance(stmt, ast.DoWhile):
+            self._scan_loop_depth += 1
+            self._scan_stmt(stmt.body)
+            self._scan_loop_depth -= 1
+            self._scan_expr(getattr(stmt, "next_expr", None), False)
+            self._scan_expr(stmt.cond, False)
+            return
+        if isinstance(stmt, ast.For):
+            self._scan_expr(stmt.range, False)
+            self._scan_loop_depth += 1
+            self._scan_stmt(stmt.body)
+            self._scan_loop_depth -= 1
+            self._scan_expr(getattr(stmt, "next_expr", None), False)
+            return
+        if isinstance(stmt, ast.TryCatch):
+            for item in stmt.body.stmts:
+                self._scan_stmt(item)
+            for catch in stmt.catches:
+                for item in catch.body.stmts:
+                    self._scan_stmt(item)
+            return
+        if isinstance(stmt, ast.RaiiScope):
+            for param in stmt.params:
+                self._scan_expr(param.default, False)
+            self._scan_stmt(stmt.body)
+            return
+        if isinstance(stmt, ast.VarDecl):
+            init = stmt.init
+            direct = init
+            while isinstance(direct, ast.Parenthesized):
+                direct = direct.expr
+            copying_reference = isinstance(direct, (ast.NameExpr, ast.Id))
+            self._scan_expr(init, copying_reference)
+            return
+        if isinstance(stmt, ast.ExprStmt):
+            self._scan_expr(stmt.expr, escape)
+            return
+        if isinstance(stmt, ast.Return):
+            self._scan_expr(stmt.expr, True)
+            return
+        if isinstance(stmt, ast.Throw):
+            self._scan_expr(stmt.expr, True)
+            return
+        if isinstance(stmt, ast.Assert):
+            self._scan_expr(stmt.cond, True)
+            self._scan_expr(stmt.message, True)
+            return
+        if isinstance(stmt, (ast.Preproc, ast.Cpp1Block, ast.UsingDecl, ast.Break, ast.Continue)):
+            return
+        for value in ast_dataclass_values(stmt):
+            self._scan_generic(value, True)
+
+    def _compute_liveness(self, decl: ast.FunctionDecl) -> None:
+        self._liveness = {}
+        self._stmt_pos = {}
+        self._pos_counter = 0
+        self._scan_loop_depth = 0
+        body = decl.body.stmt
+        if isinstance(body, ast.Block):
+            for stmt in body.stmts:
+                self._scan_stmt(stmt)
+        else:
+            self._scan_stmt(body)
+
     def check_function(self, decl: ast.FunctionDecl, owner: Optional[str]) -> None:
         if decl.body is None:
             return
+        self._compute_liveness(decl)
         this_kind = _this_kind(decl)
         env = Env(decl, owner, this_kind, self.tables, self.resolver, self.info)
         if decl.params and decl.params[0].is_this:
@@ -1520,6 +1747,20 @@ class Checker:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def ast_dataclass_values(node) -> list:
+    import dataclasses
+
+    if not dataclasses.is_dataclass(node) or isinstance(node, type):
+        return []
+    values = []
+    for field in dataclasses.fields(node):
+        try:
+            values.append(getattr(node, field.name))
+        except AttributeError:
+            continue
+    return values
 
 
 def _captured_names(node) -> set[str]:

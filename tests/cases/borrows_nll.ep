@@ -1,0 +1,27 @@
+#include <iostream>
+
+main: () = {
+    x := 1;
+    unused: in i32 = x&;
+    x = 2;
+    std::cout << "x=(x)$\n";
+
+    y := 10;
+    q: in i32 = y&;
+    std::cout << "q=(q)$\n";
+    y = 20;
+    std::cout << "y=(y)$\n";
+
+    z := 5;
+    w: inout i32 = z&;
+    w = 9;
+    std::cout << "z=(z)$\n";
+    z = 11;
+    std::cout << "z=(z)$\n";
+
+    owned: unique<i32> = new<i32>(7);
+    view: in i32 = owned*&;
+    std::cout << "view=(view)$\n";
+    moved: unique<i32> = move owned;
+    std::cout << "moved=(moved*)$\n";
+}

@@ -306,7 +306,9 @@ class OwnershipTests(unittest.TestCase):
 
     def test_borrow_conflict_is_rejected(self):
         with self.assertRaises(CompileError) as ctx:
-            self.compile("main: () = { x := 1; r: in i32 = x&; m: inout i32 = x&; }")
+            self.compile(
+                "main: () = { x := 1; r: in i32 = x&; m: inout i32 = x&; _ = r; }"
+            )
         self.assertIn("borrowed", ctx.exception.message)
 
     def test_dangling_borrow_return_is_rejected(self):
@@ -338,6 +340,34 @@ class OwnershipTests(unittest.TestCase):
     def test_prelude_does_not_duplicate_user_includes(self):
         cpp = self.compile("#include <vector>\nmain: () = { }")
         self.assertEqual(cpp.count("#include <vector>"), 1)
+
+    def test_nll_ends_borrow_after_last_use(self):
+        cpp = transpile(
+            "main: () = { x := 1; r: in i32 = x&; x = 2; }",
+            "t.ep",
+            Options(),
+        )
+        self.assertIn("i32 const& r = x;", cpp)
+        self.assertIn("(x = 2)", cpp)
+
+    def test_nll_rejects_use_after_conflict(self):
+        with self.assertRaises(CompileError) as ctx:
+            transpile(
+                'main: () = { x := 1; r: in i32 = x&; x = 2; std::cout << "r=(r)$"; }',
+                "t.ep",
+                Options(),
+            )
+        self.assertIn("while it is borrowed", ctx.exception.message)
+
+    def test_nll_conservative_across_loop_iterations(self):
+        with self.assertRaises(CompileError) as ctx:
+            transpile(
+                'main: () = { x := 1; r: in i32 = x&; i := 0; '
+                'while i < 3 { std::cout << "r=(r)$"; x = 2; i++; } }',
+                "t.ep",
+                Options(),
+            )
+        self.assertIn("while it is borrowed", ctx.exception.message)
 
     def test_strict_safety_uses_checked_arithmetic(self):
         cpp = transpile(

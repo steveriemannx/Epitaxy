@@ -207,9 +207,16 @@ The pass also produces annotations used by the code generator:
 * `deduced_borrow` — a deduced local whose initializer returns a borrow must be
   emitted as a reference (`auto const&` / `auto&`), not a copy;
 * `borrow_names` — borrow locals are never automatically moved.
+* A liveness pre-pass assigns program points to statements and records the last
+  use of every local; a named borrow's non-lexical lifetime ends after that
+  last use (or at the creation point if unused). Borrows that may escape
+  (stored/captured/passed to unknown code) or that cross a loop boundary keep
+  the conservative lexical lifetime. `Env.prune(pos)` drops dead borrows before
+  each statement.
 
-The checker is deliberately conservative: lexical borrow lifetimes, no NLL, no
-lifetime polymorphism, no C++ library modelling, no `Send`/`Sync`. External
+The checker is deliberately conservative: non-lexical borrow lifetimes with a
+lexical fallback for escaping/loop-crossing borrows, no lifetime polymorphism,
+no C++ library modelling, no `Send`/`Sync`. External
 calls are trusted except for explicit `move` arguments. See
 [`COMPATIBILITY.md`](COMPATIBILITY.md) §3.14 for the rule list.
 
@@ -247,7 +254,8 @@ The language limitations are listed in
 [`COMPATIBILITY.md`](COMPATIBILITY.md). Implementation-level work that would
 unlock the most value:
 
-1. non-lexical lifetimes (NLL) and lifetime variables for the ownership checker;
+1. full NLL and lifetime variables for the ownership checker (a conservative
+   last-use analysis is implemented; lifetime generics are not);
 2. `Send`/`Sync` (or equivalent) analysis to prevent data races;
 3. modelling of C++ library aliasing (e.g. `vector` reallocation invalidating
    borrowed elements) and library annotations;

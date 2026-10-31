@@ -307,7 +307,7 @@ CXX=clang++ python3 tests/run_tests.py
 
 ## Language documentation
 
-- [`docs/SPEC.md`](docs/SPEC.md) — complete language reference: lexical
+- [`docs/SPEC.md`](docs/SPEC.md) — complete language reference: non-lexical
   structure, declarations, types, expressions, statements, contracts, safety,
   metafunctions, C++ lowering.
 - [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) — what of Cpp2 is supported,
@@ -329,7 +329,8 @@ Epitaxy has two safety levels, documented in detail in
   calls remain a trusted boundary.
 
 Epitaxy is **not Rust-certified**: there is no `Send`/`Sync` data-race checking,
-borrow lifetimes are lexical (no NLL), and safe C++ interop is trusted. An
+borrow lifetimes are non-lexical but conservative (no lifetime generics), and
+safe C++ interop is trusted. An
 unconditional "safe code has no UB" guarantee would require an owned
 backend/runtime — see [`docs/SAFETY.md`](docs/SAFETY.md) §8.
 
@@ -366,9 +367,11 @@ of `<algorithm>`, `<map>`, `<numeric>`, `<optional>`, `<variant>`, `<chrono>`,
 
 ## Known limitations (0.2)
 
-* The borrow checker uses lexical borrow lifetimes (no NLL), has no lifetime
-  polymorphism beyond explicit `-> in(param) T` annotations, and does not model
-  C++ libraries, threads/data races or `Send`/`Sync`.
+* The borrow checker uses non-lexical lifetimes for non-escaping borrows but
+  falls back to lexical scopes when a borrow may escape or is used across loop
+  iterations; it has no lifetime generics beyond explicit `-> in(param) T`
+  annotations and does not model C++ libraries, threads/data races or
+  `Send`/`Sync`.
 * Safety is a **checked subset with an explicit trust boundary**, not a
   Rust-style blanket guarantee; see [`docs/SAFETY.md`](docs/SAFETY.md).
 * Calls into C++ are trusted as safe unless they are declared `unsafe` in

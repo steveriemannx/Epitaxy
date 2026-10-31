@@ -270,8 +270,9 @@ objects with `is_active()` and `report_violation(std::string)`.
   arithmetic to checked helpers and requires raw C++ (`cpp1`) to be inside
   `unsafe`. Its conditional guarantee and trust boundary are documented in
   [`SAFETY.md`](SAFETY.md).
-* Epitaxy is **not Rust-certified**: no data-race/`Send`-`Sync` analysis, no NLL,
-  and C++ interop is a trusted boundary. See [`SAFETY.md`](SAFETY.md) for the full
+* Epitaxy is **not Rust-certified**: no data-race/`Send`-`Sync` analysis, no
+  lifetime generics (borrow lifetimes are non-lexical but conservative), and C++
+  interop is a trusted boundary. See [`SAFETY.md`](SAFETY.md) for the full
   comparison and the path to an unconditional guarantee.
 
 ### 3.10 `main`
@@ -338,10 +339,12 @@ Checked rules (compile-time errors):
 8. moving a variable declared outside the current loop inside the loop;
 9. function expressions capturing borrows, moved values or move-only values.
 
-Deliberate limitations: lexical borrow lifetimes (no NLL), no lifetime
-variables/generics, no `Send`/`Sync`, no data-race detection, and no modelling
-of C++ library aliasing (external calls are trusted; only explicit `move`
-arguments are tracked). The checker never rejects a program because of C++
+Deliberate limitations: borrow lifetimes are non-lexical but conservative —
+they fall back to the lexical scope when a borrow may escape (stored in an
+aggregate, captured, or passed to code the checker cannot see) or is used
+across loop iterations; there are no lifetime variables/generics, no
+`Send`/`Sync`, no data-race detection, and no modelling of C++ library aliasing
+(external calls are trusted; only explicit `move` arguments are tracked). The checker never rejects a program because of C++
 library internals it cannot see.
 
 ## 4. Detailed gap inventory versus Cpp2
@@ -450,6 +453,12 @@ In 0.5.0: **strict safety mode** (`-strict-safety`) with mandatory checks,
 checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
+
+In 0.6.0: **non-lexical borrow lifetimes** — a borrow ends at its last use, so
+the owner can be mutated/moved afterwards; unused borrows end immediately.
+Borrows that may escape or that are used across loop iterations keep the
+conservative lexical lifetime. This is a first NLL step, not Rust's full
+lifetime system (no lifetime generics).
 
 ## 5. What "syntax requirement" means here
 

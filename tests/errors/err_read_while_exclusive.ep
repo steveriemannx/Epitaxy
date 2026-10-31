@@ -4,4 +4,5 @@ main: () = {
     x := 1;
     m: inout i32 = x&;
     std::cout << "x=(x)$\n";
+    m = 5;
 }

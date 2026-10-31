@@ -1,5 +1,8 @@
+#include <iostream>
+
 main: () = {
     x := 1;
     r: in i32 = x&;
     x = 2;
+    std::cout << "r=(r)$\n";
 }

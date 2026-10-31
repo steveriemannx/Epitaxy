@@ -5,7 +5,7 @@ because "safe" is meaningless without a threat model, and because Epitaxy is
 often compared to Rust — a comparison that only makes sense if the exact
 guarantee boundary is written down.
 
-**Epitaxy 0.5 is not Rust-certified.** It implements a Rust-style ownership and
+**Epitaxy 0.6 is not Rust-certified.** It implements a Rust-style ownership and
 borrow checker and a default-on checked runtime, but it compiles to C++20 and
 lets you call arbitrary C++ code. A Rust-style *unconditional* guarantee — "no
 undefined behaviour in safe code" — requires an execution model Epitaxy does not
@@ -122,11 +122,11 @@ Rules for keeping `unsafe` sound (documented, not machine-checked):
 These are the gaps relative to Rust. They are the reason this document says
 "conditional guarantee" rather than "memory safe" or "Rust-level".
 
-| Rust guarantee | Epitaxy 0.5 |
+| Rust guarantee | Epitaxy 0.6 |
 | --- | --- |
 | no UB in safe code | conditional: excluded C++/unsafe/`unchecked_*` surface only |
 | no data races | **not checked at all** — no `Send`/`Sync`-equivalent traits or thread model |
-| full lifetimes / NLL | lexical borrow lifetimes only; no lifetime generics; no interior mutability model |
+| full lifetimes / NLL | non-lexical borrow lifetimes with conservative lexical fallback for escaping/loop-crossing borrows; no lifetime generics; no interior mutability model |
 | no null | `nullptr` exists; runtime null checks instead |
 | no uninitialized reads | `out` parameters are plain references; data members may be default-initialised |
 | integer overflow never silent | strict mode checks arithmetic Epitaxy lowers; C++ library internals are not checked |
@@ -135,10 +135,10 @@ These are the gaps relative to Rust. They are the reason this document says
 
 ## 6. Comparison to Rust in one table
 
-| Mechanism | Rust | Epitaxy 0.5 |
+| Mechanism | Rust | Epitaxy 0.6 |
 | --- | --- | --- |
 | ownership + move | yes | yes (for Epitaxy code; conservative automatic last-use move) |
-| borrow checking | NLL, lifetimes, generics | lexical scopes, explicit borrow sources, no lifetime generics |
+| borrow checking | NLL, lifetimes, generics | NLL for non-escaping borrows, conservative otherwise; explicit borrow sources; no lifetime generics |
 | bounds checking | always (arrays/Vec) | checked by default for sized random-access containers; can be disabled outside strict |
 | integer overflow | debug checks / explicit APIs | strict mode checks lowered arithmetic; otherwise unchecked |
 | raw pointers | `unsafe` | `unsafe` |
@@ -164,7 +164,7 @@ To make a Rust-equivalent promise, Epitaxy would need all of:
 
 1. **a real front end** — typed IR and semantic analysis, so more properties can
    be checked at compile time;
-2. **NLL and lifetime generics**, plus interior-mutability modelling;
+2. **full NLL and lifetime generics**, plus interior-mutability modelling (the current checker has a conservative NLL step only);
 3. **a thread model** — `Send`/`Sync`-equivalent traits and checked concurrency;
 4. **an execution model that cannot silently produce UB** — either an owned
    backend/runtime (no C++), or a fully modelled, trusted C++ core with
