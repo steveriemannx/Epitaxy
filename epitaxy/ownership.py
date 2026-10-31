@@ -1141,7 +1141,7 @@ class Checker:
             try:
                 for p in stmt.params:
                     if p.name:
-                        self.check_expr(p.init, env)
+                        self.check_expr(p.default, env)
                         env.declare(p.name, self.resolver.ty_of(p.type) if p.type is not None else UNKNOWN)
                 self.check_stmt(stmt.body, env)
             finally:

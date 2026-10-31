@@ -1,0 +1,14 @@
+#include <iostream>
+
+check: (x: i32)
+    pre<unevaluated>(x > 0)
+    post<unevaluated>(x < 0)
+= {
+    std::cout << "body ran\n";
+}
+
+main: () = {
+    check(-5);
+    assert<unevaluated>(false);
+    std::cout << "contracts were not evaluated\n";
+}

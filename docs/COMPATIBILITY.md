@@ -93,7 +93,10 @@ C++20.
 | `try`/`catch`/`throw` | supported | |
 | `return`, `_ = expr` discard | supported | |
 | `assert(cond, "msg")`, `pre(...)`, `post(...)`, groups and predicates | supported | |
-| Local scoped parameter blocks `(x: T = v) { … }` | supported | |
+| Local scoped parameter blocks `(x: T = v) { … }` and immediate declarations `(copy i := 0) while …` | supported | |
+| Member `operator()` and `operator[]` | supported | lowered as member operator functions |
+| Defaulted memberwise comparisons `operator<=>: (this, that) -> …;` / `operator==: …;` | supported | emitted as defaulted C++ comparison operators |
+| Contract group `unevaluated` | supported | the contract is parsed and then ignored |
 
 ### Safety and semantics
 
@@ -113,39 +116,26 @@ C++20.
 
 ---
 
-## 2. Cpp2 features not implemented in 0.2
+## 2. Cpp2 features not implemented in 0.2 (summary)
 
-These are parsed where the syntax is unambiguous, or rejected with a clear
-diagnostic where they are not:
+The short list is:
 
-* **Custom metaprogramming / reflection.** Only `@value`, `@copyable`,
-  `@interface` and `@enum` exist. There is no `@flag_enum`, `@union`,
-  `@singleton`, `@regex`, `@autodiff`, `@print`, `@ordered`, and no user-defined
-  metafunctions.
-* **Template-name and concept `is` queries** such as `x is std::vector` or
-  `x is std::integral`.
-* **Rust-grade borrow checking**: Epitaxy has a conservative ownership/borrow
-  checker (§3.14), but not non-lexical lifetimes, lifetime polymorphism, data
-  race/`Send`/`Sync` analysis, or library-aware alias modelling.
-* **Modules**: no `import`/`export`.
-* **Mixed Cpp1/Cpp2 source.** Only preprocessor lines are passed through; you
-  cannot put C++ declarations or C++ statement bodies in a `.ep` file.
-* **Deferred `out` construction.** `out` parameters are plain references; there
-  is no proxy that can construct an uninitialized argument, so arguments must
-  already be initialized lvalues.
-* **General C++ declarator syntax** for unusual types (e.g. pointer-to-member,
-  references as object types, cv-qualified function types beyond the supported
-  forms).
-* **`?:` conditional operator**, `switch`, `goto`, `co_await`/coroutines.
-* **Free-function operator overloads**, conversion operators, `operator()`
-  overloads with arbitrary parameters, and `new`/`delete` overloads.
-* **Static data members**, mutable members, `constexpr`/`consteval` qualifiers
-  beyond the `==` alias form.
-* **Multiple translation units / separate compilation** driven by Epitaxy
-  itself; use C++ headers for interop.
-* Cpp2's full flow-sensitive "definite last use" analysis (see §3.4).
+* **Reflection and metaprogramming**: no reflection API, and only `@value`,
+  `@copyable`, `@interface`, `@enum` metafunctions.
+* **Mixed Cpp1/Cpp2 source**: only preprocessor lines are passed through.
+* **Modules / multi-file builds**: none.
+* **Full `is`/`as`**: no template-name, concept or value-predicate queries; no
+  `std::expected` or user customization.
+* **`out` parameter construction semantics**: plain references, no guaranteed
+  initialisation proxy.
+* **cppfront tooling parity** and the `cpp2::` support-library namespace.
+* **Assorted syntax**: template-template parameters, general value-list
+  expressions, `forward_ref` enforcement, memberwise defaulting beyond
+  `<=>`/`==`.
 
----
+The complete inventory, including narrower-than-Cpp2 behaviour (metafunctions,
+`operator=` matrix, contracts, safety-check coverage, interpolation, `in`/`inout`
+semantics, and so on) is in section 4.
 
 ## 3. Deliberate semantic deviations
 
@@ -329,7 +319,88 @@ of C++ library aliasing (external calls are trusted; only explicit `move`
 arguments are tracked). The checker never rejects a program because of C++
 library internals it cannot see.
 
-## 4. What "syntax requirement" means here
+## 4. Detailed gap inventory versus Cpp2
+
+This section is the complete inventory of Cpp2 features that Epitaxy 0.2 does
+**not** implement or implements with narrower semantics. (Section 3.14 describes
+the one place where Epitaxy goes *beyond* Cpp2: ownership/borrow checking.)
+
+### 4.1 Not implemented at all
+
+1. **Reflection and metaprogramming.** Cppfront's metafunction library is
+   written in Cpp2 on top of a reflection API. Epitaxy has no reflection API and
+   only four built-in metafunctions (`@value`, `@copyable`, `@interface`,
+   `@enum`). Missing: `@weakly_ordered`, `@partially_ordered`, `@ordered`,
+   `@basic_value`, `@weakly_ordered_value`, `@partially_ordered_value`,
+   `@flag_enum`, `@union`, `@singleton`, `@regex`, `@autodiff`, `@print`, and
+   user-defined metafunctions. There is also no way to customize (suppress or
+   extend) the members a metafunction generates.
+2. **Mixed Cpp1/Cpp2 source.** Only preprocessor lines are passed through. A
+   `.ep` file cannot contain raw C++ declarations, statements or expressions;
+   Cpp1 interop is limited to `#include` plus calling generated functions from
+   C++.
+3. **Modules.** No `import`/`export`, no `-import-std`, no multi-file
+   compilation: one translation unit at a time.
+4. **The full `is` / `as` query system.**
+   * no template-name queries (`x is std::vector`);
+   * no concept queries (`x is std::integral`);
+   * no value-predicate queries (`x is (in(10, 20))`); a parenthesised constraint
+     is only an equality value;
+   * dynamic queries are limited to `std::any`, `std::variant`,
+     `std::optional` and polymorphic-pointer `*D`; there is no
+     `std::expected` support (the target is C++20) and no customization/extension
+     point for user types;
+   * `as` has no customization points and no `std::expected` support.
+5. **`out` parameter construction semantics.** Cpp2 `out` parameters support
+   guaranteed initialisation and construction-instead-of-assignment through an
+   `out<X>` proxy. Epitaxy lowers `out` to a plain `T&`, so the argument must
+   already exist and be default-constructible; there is no deferred
+   initialisation and no per-object initialisation tracking.
+6. **cppfront's compiler options / tooling.** cppfront offers options such as
+   `-clean`, `-import-std`, `-include`, syntax-only checking, warning modes,
+   colour control and Cpp1-emission controls. Epitaxy has a deliberately small
+   CLI (output/emit/run/compile, `--keep`, safety toggles).
+7. **The `cpp2::` support-library surface.** Epitaxy's runtime is `epi::`, not
+   `cpp2::`; code written against cppfront's `cpp2util.h` names
+   (`cpp2::contract_group`, `cpp2::args_t`, `cpp2::to_string`, …) will not
+   compile unmodified. `epi::args_t` is also a subset of the Cpp2 `args` API.
+8. **Misc syntax**: template-template parameters; `@metafunction` arguments
+   other than `@enum`'s underlying type; named-return and `operator=`
+   interactions; non-standard `main` return types; general parenthesised value
+   lists in arbitrary expressions; `noexcept`/`constexpr`/`explicit`
+   control beyond what Epitaxy documents.
+
+### 4.2 Implemented, but narrower than Cpp2
+
+| Area | What is narrower |
+| --- | --- |
+| `is` / `as` | exact static type queries plus the dynamic cases above; no concepts/template names/predicates/customization |
+| `@enum` | `i32` default underlying type; no `@flag_enum`; no implicit conversion to/from the underlying type; only member functions in the body |
+| `@value` / `@copyable` | generates the defaulted operations and `<=>`, but does not enforce Cpp2's restrictions (e.g. no virtual/protected members) |
+| `@interface` | forces `virtual` and a virtual destructor, rejects data members; no `@print` or other interface helpers |
+| `operator=` | supports the documented subset of the constructor/assignment matrix; explicit member assignments are used verbatim in generated move variants; contracts on `operator=` are an error, not applied |
+| Memberwise defaulting | only `<=>` and `==` can be defaulted memberwise; other defaulted special members are not generated |
+| Contracts | `pre`/`post`/`assert`, groups, predicates, messages and `$` captures work; contracts on constructors/assignment/destructor are rejected; message captures are evaluated at violation time, not entry; `unevaluated` is supported |
+| `in` parameters | Epitaxy's by-value-vs-`const&` choice is a heuristic (and keeps template deduction working); Cpp2 uses a dedicated `cpp2::in<T>` type with slightly different observable behaviour |
+| `forward` parameters | no extra "convertible-to" requires-constraint when a concrete type is named |
+| Return deduction | `-> forward _` and `-> forward_ref _` are approximated with `decltype(auto)`; `forward_ref _` is not enforced to be a reference |
+| Automatic last-use move | conservative approximation (no full control-flow analysis); suppressed where the address is taken |
+| String interpolation | `std::format` for format specs; types must be formattable or streamable; no Cpp2 `to_string` customization point; `$`/`(` escapes are Epitaxy-specific (`\$`, `\(`) |
+| Function expressions | capture outer variables by reference; `$` captures by value; borrows, moved values and move-only values cannot be captured |
+| Safety checks | mixed-sign checks cover relational operators only (compile time); bounds checks only for sized random-access containers; null checks only for raw pointers; division checks only for integers |
+| `args` | `epi::args_t` provides `argc`, `argv`, `[]`, `size`, `ssize`, `begin`/`end`; not every `std::array`-like operation |
+| Immediate parameter blocks | supported, including `(copy i := 0)`; parameter kinds other than `copy`/`in` are not interpreted specially |
+| Diagnostics | contract messages carry `basename:line: function: kind`; C++ diagnostics expose the generated file |
+
+### 4.3 Deliberately enabled in 0.2.0 (previously gaps)
+
+For the record, these Cpp2 forms were added while preparing this inventory:
+immediate local declarations with `:=` in scoped parameter blocks, the
+`unevaluated` contract group, defaulted memberwise `<=>`/`==`, and member
+`operator()` / `operator[]` lowering (including the checked-subscript fallback
+for types that only provide `operator[]`).
+
+## 5. What "syntax requirement" means here
 
 The syntax implemented here is the Cpp2 surface syntax as publicly documented
 for cppfront, plus the ownership extension described in §3.14 (unified `name: kind = value` declarations, left-to-right types,
@@ -343,7 +414,7 @@ above.
 
 ---
 
-## 5. Comparison with cppfront's runtime surface
+## 6. Comparison with cppfront's runtime surface
 
 Cppfront programs can name the support namespace `cpp2::`. Epitaxy programs use
 `epi::` for the same purposes (`epi::default_`, `epi::contract_group`,

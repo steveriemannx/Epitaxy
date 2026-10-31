@@ -1,0 +1,13 @@
+#include <iostream>
+
+main: () = {
+    (x: i32 = 5) {
+        std::cout << "scoped x=(x)$\n";
+    }
+
+    sum := 0;
+    (copy i := 0) while i < 3 next i++ {
+        sum += i;
+    }
+    std::cout << "sum=(sum)$\n";
+}

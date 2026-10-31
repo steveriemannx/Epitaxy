@@ -1,0 +1,18 @@
+#include <iostream>
+
+main: () = {
+    total := 0;
+    add_to_total := :(v: i32) = {
+        total&$* += v;
+    };
+    add_to_total(5);
+    add_to_total(2);
+    std::cout << "by reference total=(total)$\n";
+
+    snapshot := 10;
+    report := :() = {
+        std::cout << "by value snapshot=(snapshot$)$\n";
+    };
+    snapshot = 99;
+    report();
+}

@@ -674,8 +674,14 @@ class CodeGen:
         if decl.body is None:
             if interface or self._is_virtual_func(decl):
                 self.emit(sig + " = 0;")
-            else:
-                self.emit(sig + ";")
+                return
+            if decl.is_operator and decl.operator in ("<=>", "==") and self._is_defaulted_comparison(decl, info):
+                if decl.operator == "<=>":
+                    self.emit(f"auto operator<=>({info.name} const& that) const = default;")
+                else:
+                    self.emit(f"bool operator==({info.name} const& that) const = default;")
+                return
+            self.emit(sig + ";")
             return
         if decl.kind == "==":
             sig = self._add_constexpr(sig)
@@ -684,6 +690,12 @@ class CodeGen:
         self.gen_function_contents(decl, class_info=info)
         self.indent -= 1
         self.emit("}")
+
+    def _is_defaulted_comparison(self, decl: ast.FunctionDecl, info: TypeInfo) -> bool:
+        extra = [p for p in decl.params if not p.is_this]
+        if len(extra) != 1 or not extra[0].is_that:
+            return False
+        return self.this_kind(decl) == "in"
 
     def _is_virtual_func(self, decl: ast.FunctionDecl) -> bool:
         p = self.this_param(decl)
@@ -694,6 +706,12 @@ class CodeGen:
     # ------------------------------------------------------------------
 
     def gen_special_member_function(self, decl: ast.FunctionDecl, info: TypeInfo) -> None:
+        if decl.contracts:
+            self.fail(
+                "contracts on operator= (constructors/assignment/destructor) are not "
+                "supported by Epitaxy 0.2",
+                decl,
+            )
         this_kind = self.this_kind(decl)
         extra = [p for p in decl.params if not p.is_this]
         if decl.operator != "=":
@@ -1250,6 +1268,8 @@ class CodeGen:
         # Postconditions are captured on entry.
         post_specs = []
         for contract in decl.contracts:
+            if self._is_unevaluated(contract):
+                continue
             if contract.kind == "post":
                 cond, msg, group, preds = self.prepare_contract(contract, ctx, capture=True)
                 post_specs.append((cond, msg, group, preds, contract))
@@ -1261,6 +1281,8 @@ class CodeGen:
         ]
 
         for contract in decl.contracts:
+            if self._is_unevaluated(contract):
+                continue
             if contract.kind == "pre":
                 self.gen_contract_check(contract, ctx, decl.name or "function")
 
@@ -1362,6 +1384,17 @@ class CodeGen:
     # ------------------------------------------------------------------
     # Contracts
     # ------------------------------------------------------------------
+
+    def _is_unevaluated(self, contract) -> bool:
+        groups = getattr(contract, "groups", None) or []
+        if not groups:
+            return False
+        expr = groups[0]
+        return (
+            isinstance(expr, ast.NameExpr)
+            and len(expr.name.parts) == 1
+            and expr.name.parts[0] == "unevaluated"
+        )
 
     def contract_group_code(self, contract, ctx: FnCtx) -> str:
         groups = contract.groups
@@ -1467,6 +1500,8 @@ class CodeGen:
         elif isinstance(stmt, ast.Throw):
             self.emit(f"throw {self.cxpr(stmt.expr, ctx)};")
         elif isinstance(stmt, ast.Assert):
+            if self._is_unevaluated(stmt):
+                return
             cond, msg, group, preds = self.prepare_contract(stmt, ctx, capture=False)
             self.emit(self.contract_check_code(cond, msg, group, preds, stmt, "assert"))
         elif isinstance(stmt, ast.UnsafeBlock):
@@ -1728,18 +1763,19 @@ class CodeGen:
         self.indent += 1
         for p in stmt.params:
             name = p.name or self.gensym("scoped")
+            init = p.default
             if p.type is None or isinstance(p.type, ast.DeducedType):
-                if p.init is None:
+                if init is None:
                     self.fail("a scoped parameter with a deduced type needs an initial value", p)
-                self.emit(f"auto {name} = {self.cxpr(p.init, ctx)};")
+                self.emit(f"auto {name} = {self.cxpr(init, ctx)};")
             else:
                 t = self.cpp_type(p.type)
-                if p.init is None:
+                if init is None:
                     self.emit(f"{t} {name};")
-                elif isinstance(p.init, ast.InitList):
-                    self.emit(f"{t} {name}{self.initializer_code(p.init)};")
+                elif isinstance(init, ast.InitList):
+                    self.emit(f"{t} {name}{self.initializer_code(init)};")
                 else:
-                    self.emit(f"{t} {name} = {self.cxpr(p.init)};")
+                    self.emit(f"{t} {name} = {self.cxpr(init, ctx)};")
         self.gen_stmt(stmt.body, ctx)
         self.indent -= 1
         self.emit("}")

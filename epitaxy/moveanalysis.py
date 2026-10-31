@@ -102,7 +102,7 @@ class _Analysis:
             for p in stmt.params:
                 if p.name:
                     self.locals.add(p.name)
-                self.walk_expr(p.init, "init", depth, in_lambda)
+                self.walk_expr(p.default, "init", depth, in_lambda)
             self.walk_stmt(stmt.body, depth + 1, in_lambda)
         elif isinstance(stmt, ast.UsingDecl):
             pass

@@ -312,9 +312,13 @@ CXX=clang++ python3 tests/run_tests.py
   C++ libraries, threads/data races or `Send`/`Sync`.
 * Calls into C++ are trusted as safe unless they are declared `unsafe` in
   Epitaxy; raw pointer operations are gated by `unsafe`.
-* Cpp2 metafunctions beyond `@value`, `@copyable`, `@interface` and `@enum` are
-  not implemented.
-* The full list is in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+* Versus Cpp2, the largest missing pieces are: reflection and the metafunction
+  library (only `@value`, `@copyable`, `@interface`, `@enum` exist); mixed
+  Cpp1/Cpp2 source and modules; the full `is`/`as` query system (concepts,
+  template names, value predicates, `std::expected`, customization); `out`
+  parameter construction semantics; and cppfront's tooling/`cpp2::` namespace.
+* The complete gap inventory is in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)
+  section 4.
 
 ## License and independence
 

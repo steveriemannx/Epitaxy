@@ -1,0 +1,34 @@
+#include <iostream>
+
+point: type = {
+    x: i32 = 0;
+    y: i32 = 0;
+
+    operator=: (out this, xv: i32, yv: i32) = {
+        x = xv;
+        y = yv;
+    }
+
+    operator<=>: (this, that) -> std::strong_ordering;
+    operator==: (this, that) -> bool;
+}
+
+main: () = {
+    a: point = (1, 2);
+    b: point = (3, 4);
+
+    if a < b {
+        std::cout << "a<b\n";
+    }
+    if a == b {
+        std::cout << "equal\n";
+    }
+    else {
+        std::cout << "not equal\n";
+    }
+
+    a = b;
+    if a == b {
+        std::cout << "equal after assignment\n";
+    }
+}

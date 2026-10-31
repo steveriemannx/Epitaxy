@@ -525,8 +525,21 @@ vec2: type = {
 ```
 
 `operator=` is special: it defines construction, assignment and destruction
-(see section 6.3). Free-function operators and `->`/`new`/`delete` overloads are
-not supported in Epitaxy 0.2.
+(see section 6.3). `operator()` and `operator[]` are lowered as member operator
+functions. A member comparison declared without a body is generated as a
+defaulted memberwise comparison:
+
+```cpp2
+point: type = {
+    x: i32 = 0; y: i32 = 0;
+    operator<=>: (this, that) -> std::strong_ordering;   // memberwise defaulted
+    operator==: (this, that) -> bool;                     // memberwise defaulted
+}
+```
+
+Free-function operators and `->`/`new`/`delete` overloads are not supported in
+Epitaxy 0.2, and contracts cannot be attached to `operator=` special members
+(they are rejected).
 
 ### 5.9 Function expressions (lambdas)
 
@@ -691,6 +704,10 @@ and executes the statement with them in scope (the "RAII block" form):
 ```cpp2
 (x: std::lock_guard = mut) {
     // x is in scope here and destroyed at the end
+}
+
+(copy i := 0) while i < 10 next i++ {
+    // i is a local copy, scoped to this loop
 }
 ```
 
@@ -918,6 +935,10 @@ Suffix `$` captures the value of an expression at the point where it is written:
   function expression is created;
 * elsewhere it evaluates the expression at that point.
 
+`place&$` captures the *address* of a place, and dereferencing it inside the
+body captures by reference: `total&$* += v` adds to `total` itself rather than
+to a copy.
+
 ### 8.11 Fold expressions and packs
 
 C++17 fold expressions and pack expansions are supported:
@@ -962,7 +983,9 @@ divide: (a: i32, b: i32) -> i32
   `assert<audit, is_checked_build, checking_enabled>(condition)`.
 
 A contract is checked only when its predicates are true and its group is active.
-A violation calls `group.report_violation(message)`.
+A violation calls `group.report_violation(message)`. Contracts on `operator=`
+special members (constructors, assignment, destructor) are not supported and are
+rejected.
 
 ### 9.2 Assertions
 
@@ -970,6 +993,9 @@ A violation calls `group.report_violation(message)`.
 when control passes through it. `assert<group>(condition)` selects a group.
 
 ### 9.3 Contract groups
+
+The special group `unevaluated` marks a contract for static analyzers only: it
+is parsed and then ignored (the condition is never evaluated).
 
 The built-in groups are `default`, `type_safety`, `bounds_safety`,
 `null_safety` and `testing` (lowered to `epi::default_`, `epi::type_safety`,

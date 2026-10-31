@@ -551,7 +551,9 @@ class Parser:
             type_ = self.parse_type_with_constraint()
 
         default = None
-        if self.match("="):
+        if self.match(":="):
+            default = self.parse_expression(stop={",", ")"})
+        elif self.match("="):
             default = self.parse_expression()
 
         return ast.Param(

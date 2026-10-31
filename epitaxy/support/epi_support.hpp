@@ -262,12 +262,12 @@ inline constexpr bool dependent_false_v = false;
 // size and random-access iterators; other subscripts pass through unchanged.
 template <class Container, class Index>
 constexpr decltype(auto) subscript(Container&& container, Index&& index) {
-    if constexpr (requires { std::size(container); } &&
-                  requires { std::begin(container); } &&
-                  std::random_access_iterator<decltype(std::begin(container))>) {
-        auto const size = std::size(container);
-        if (!detail::index_in_range(index, size)) {
-            bounds_safety.report_violation("subscript index is out of bounds");
+    if constexpr (requires { std::size(container); } && requires { std::begin(container); }) {
+        if constexpr (std::random_access_iterator<decltype(std::begin(container))>) {
+            auto const size = std::size(container);
+            if (!detail::index_in_range(index, size)) {
+                bounds_safety.report_violation("subscript index is out of bounds");
+            }
         }
     }
     return std::forward<Container>(container)[std::forward<Index>(index)];

@@ -1,0 +1,16 @@
+#include <iostream>
+
+indexer: type = {
+    public base: i32 = 100;
+
+    operator[]: (this, i: i32) -> i32 = base + i;
+}
+
+main: () = {
+    v: indexer = ();
+    std::cout << "v[1]=(v[1])$\n";
+
+    w: indexer = ();
+    w.base = 200;
+    std::cout << "w[2]=(w[2])$\n";
+}
