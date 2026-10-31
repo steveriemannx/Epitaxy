@@ -20,6 +20,9 @@ Non-goals for 0.2:
 * C++ type checking or whole-program semantic analysis;
 * reflection and user-defined metafunctions;
 * separate compilation / modules;
+* mixed Cpp1/Cpp2 source files — an intentional non-goal: Epitaxy is a new
+  language, and C++ interop happens through headers and ordinary calls, not by
+  pasting C++ declarations into `.ep` files;
 * bootstrapping (implementation is in Python).
 
 ## Pipeline

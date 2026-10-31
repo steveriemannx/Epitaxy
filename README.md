@@ -37,8 +37,11 @@ Hello, world!
 - **Ownership and borrowing** — `unique<T>` and `shared<T>` owning handles,
   `in T` / `inout T` borrows, move checking, and an explicit `unsafe` boundary
   for raw pointers.
-- **C++ interop** — include C++ headers with `#include` and use C++ types,
-  functions and objects directly. The output is ordinary C++20.
+- **C++ ecosystem, no bindings** — include C++ headers with `#include` and use
+  C++ types, functions and objects directly. The output is ordinary C++20 with
+  the same ABI, so there is no FFI/binding layer. (See the
+  [interop model](#interop-model): Epitaxy is a new language, not a C++ syntax
+  mode.)
 
 ## Status
 
@@ -305,6 +308,28 @@ CXX=clang++ python3 tests/run_tests.py
   what is intentionally different, and what is not implemented in 0.2.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — how the compiler is built and why.
 
+## Interop model
+
+Epitaxy is a **new language**, not a "C++ syntax mode", so **mixed Cpp1/Cpp2
+source files are an explicit non-goal**. Interop works at the header/library
+level:
+
+* `#include` any C++ header; call its functions and use its types directly. This
+  includes the standard library, third-party libraries and in-house C++ code.
+* Epitaxy lowers to ordinary C++20, so exceptions, allocators, ABI, calling
+  conventions and link-time behaviour are exactly C++'s: there is no marshalling
+  or FFI layer, and no runtime interpreter.
+* C++ raw-pointer APIs are usable through the explicit `unsafe` boundary
+  (`unsafe { ... }`, `unsafe(expr)`, `unsafe` functions).
+* C++ code calling Epitaxy from **another** translation unit currently needs a
+  hand-written C++ header (or the generated `.cpp` compiled in the same unit).
+  Generating an interface header (`--emit-header`) is future work, not part of
+  the mixed-mode question.
+
+[`examples/cpp_ecosystem.ep`](examples/cpp_ecosystem.ep) demonstrates direct use
+of `<algorithm>`, `<map>`, `<numeric>`, `<optional>`, `<variant>`, `<chrono>`,
+`<filesystem>` and smart pointers from Epitaxy.
+
 ## Known limitations (0.2)
 
 * The borrow checker uses lexical borrow lifetimes (no NLL), has no lifetime
@@ -313,10 +338,11 @@ CXX=clang++ python3 tests/run_tests.py
 * Calls into C++ are trusted as safe unless they are declared `unsafe` in
   Epitaxy; raw pointer operations are gated by `unsafe`.
 * Versus Cpp2, the largest missing pieces are: reflection and the metafunction
-  library (only `@value`, `@copyable`, `@interface`, `@enum` exist); mixed
-  Cpp1/Cpp2 source and modules; the full `is`/`as` query system (concepts,
-  template names, value predicates, `std::expected`, customization); `out`
-  parameter construction semantics; and cppfront's tooling/`cpp2::` namespace.
+  library (only `@value`, `@copyable`, `@interface`, `@enum` exist); the full
+  `is`/`as` query system (concepts, template names, value predicates,
+  `std::expected`, customization); `out` parameter construction semantics; and
+  cppfront's tooling/`cpp2::` namespace. Mixed Cpp1/Cpp2 source and modules are
+  intentionally out of scope (see the interop model above).
 * The complete gap inventory is in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)
   section 4.
 

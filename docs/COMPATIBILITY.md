@@ -335,10 +335,15 @@ the one place where Epitaxy goes *beyond* Cpp2: ownership/borrow checking.)
    `@flag_enum`, `@union`, `@singleton`, `@regex`, `@autodiff`, `@print`, and
    user-defined metafunctions. There is also no way to customize (suppress or
    extend) the members a metafunction generates.
-2. **Mixed Cpp1/Cpp2 source.** Only preprocessor lines are passed through. A
-   `.ep` file cannot contain raw C++ declarations, statements or expressions;
-   Cpp1 interop is limited to `#include` plus calling generated functions from
-   C++.
+2. **Mixed Cpp1/Cpp2 source (intentional non-goal).** Only preprocessor lines
+   are passed through. A `.ep` file cannot contain raw C++ declarations,
+   statements or expressions. This is a deliberate design choice: Epitaxy is a
+   new language, and C++ interop happens at the header/library level instead
+   (`#include` any header, call its functions, use its types; generated code is
+   ordinary C++ with no bindings layer). Raw-pointer C++ APIs cross an explicit
+   `unsafe` boundary. Calling Epitaxy from another C++ translation unit
+   currently requires a hand-written header; generated interface headers
+   (`--emit-header`) are future work.
 3. **Modules.** No `import`/`export`, no `-import-std`, no multi-file
    compilation: one translation unit at a time.
 4. **The full `is` / `as` query system.**

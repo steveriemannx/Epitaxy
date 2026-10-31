@@ -1,0 +1,65 @@
+// Calling the C++ standard library directly from Epitaxy: no bindings, no FFI.
+#include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <numeric>
+#include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+
+join_sorted: (inout words: std::vector<std::string>) -> std::string = {
+    words.std::ranges::sort();
+    return std::accumulate(words.begin(), words.end(), std::string(""));
+}
+
+describe: (value: std::variant<i32, std::string>) -> std::string = {
+    if value is i32 {
+        return "variant: int";
+    }
+    if value is std::string {
+        return "variant: string";
+    }
+    return "variant: other";
+}
+
+main: () = {
+    words: std::vector<std::string> = ("pear", "apple", "plum");
+    std::cout << "sorted: " << join_sorted(words) << "\n";
+
+    counts: std::map<std::string, i32> = ();
+    for words do (word) {
+        counts[word] += 1;
+    }
+    for counts do (entry) {
+        std::cout << entry.first << "=" << entry.second << " ";
+    }
+    std::cout << "\n";
+
+    maybe: std::optional<i32> = ();
+    if maybe is i32 {
+        std::cout << "optional empty\n";
+    }
+    maybe = 7;
+    if maybe is i32 {
+        std::cout << "optional has (maybe as i32)$\n";
+    }
+
+    v: std::variant<i32, std::string> = 42;
+    std::cout << describe(v) << "\n";
+    v = std::string("text");
+    std::cout << describe(v) << "\n";
+
+    duration := std::chrono::milliseconds(42);
+    std::cout << "chrono: " << duration.count() << "ms\n";
+
+    owned: unique<i32> = new<i32>(9);
+    shared_owner: shared<i32> = shared.new<i32>(10);
+    std::cout << "smart pointers: " << (owned*)$ << " " << (shared_owner*)$ << "\n";
+
+    path := std::filesystem::path("/tmp/example.txt");
+    std::cout << "filesystem extension: " << path.extension() << "\n";
+}

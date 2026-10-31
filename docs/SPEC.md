@@ -1170,6 +1170,12 @@ The checks can be disabled for a translation unit with `-no-ownership-checks`.
   The `::epi` namespace is reserved for the Epitaxy support library.
 * Multi-file programs are not supported in 0.2: one translation unit at a time,
   with C++ headers for interop.
+* Mixed Cpp1/Cpp2 source files are not supported and are an intentional
+  non-goal: C++ interop is at the header/library level. Epitaxy code lowers to
+  ordinary C++20, so the C++ ABI, exceptions and libraries apply directly; raw
+  pointer APIs require an `unsafe` context. Calling Epitaxy code from another
+  C++ translation unit requires a hand-written interface header (generated
+  headers are future work).
 
 The support header `epi_support.hpp` (MIT licensed, part of Epitaxy) provides
 the contract groups, UFCS macro, checked operations, `is`/`as` helpers, range
