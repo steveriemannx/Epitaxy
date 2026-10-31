@@ -339,6 +339,38 @@ class OwnershipTests(unittest.TestCase):
         cpp = self.compile("#include <vector>\nmain: () = { }")
         self.assertEqual(cpp.count("#include <vector>"), 1)
 
+    def test_strict_safety_uses_checked_arithmetic(self):
+        cpp = transpile(
+            "main: () = { x := 1 + 2; x += 3; x++; }",
+            "t.ep",
+            Options(strict_safety=True),
+        )
+        self.assertIn("::epi::checked_add(1, 2)", cpp)
+        self.assertIn("::epi::checked_add_assign(x, 3)", cpp)
+        self.assertIn("::epi::checked_inc(x)", cpp)
+
+    def test_strict_safety_rejects_cpp1_outside_unsafe(self):
+        with self.assertRaises(CompileError) as ctx:
+            transpile('cpp1 { int raw = 1; }\nmain: () = { }', "t.ep", Options(strict_safety=True))
+        self.assertIn("unsafe", ctx.exception.message)
+
+    def test_strict_safety_allows_cpp1_in_unsafe_function(self):
+        cpp = transpile(
+            'raw: unsafe () = { cpp1 { int raw_value = 1; } }\nmain: () = { }',
+            "t.ep",
+            Options(strict_safety=True),
+        )
+        self.assertIn("int raw_value = 1;", cpp)
+
+    def test_strict_safety_forces_checks_on(self):
+        cpp = transpile(
+            "main: () = { v: std::vector = (1); _ = v[0]; _ = 1 / 2; }",
+            "t.ep",
+            Options(strict_safety=True, subscript_checks=False, div_checks=False),
+        )
+        self.assertIn("::epi::subscript(", cpp)
+        self.assertIn("::epi::div(", cpp)
+
     def test_ownership_checks_can_be_disabled(self):
         cpp = self.compile(
             "main: () = { x := 1; p: *i32 = unsafe(x&); _ = p*; }",

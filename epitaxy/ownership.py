@@ -301,12 +301,13 @@ class Env:
 
 class Checker:
     def __init__(self, tables: Tables, resolver: TypeResolver, info: OwnershipInfo,
-                 filename: str, enabled: bool = True):
+                 filename: str, enabled: bool = True, strict: bool = False):
         self.tables = tables
         self.resolver = resolver
         self.info = info
         self.filename = filename
         self.enabled = enabled
+        self.strict = strict
 
     # -- diagnostics ----------------------------------------------------
 
@@ -1070,7 +1071,12 @@ class Checker:
                 env.unsafe -= 1
             return
         if isinstance(stmt, ast.Cpp1Block):
-            return  # raw C++ is opaque to the ownership checker
+            if self.strict and env.unsafe == 0:
+                self.error(
+                    "a 'cpp1' block requires an 'unsafe' context in strict safety mode",
+                    stmt,
+                )
+            return
         if isinstance(stmt, ast.ExprStmt):
             self.check_expr(stmt.expr, env)
             return
@@ -1604,13 +1610,31 @@ class _SigBuilder(Checker):
 
 
 def analyze(tu: ast.TranslationUnit, filename: str = "<input>",
-            enabled: bool = True) -> OwnershipInfo:
+            enabled: bool = True, strict: bool = False) -> OwnershipInfo:
     """Check ownership/borrowing and return code-generation annotations."""
 
     tables = build_tables(tu)
     resolver = TypeResolver(tables)
     info = OwnershipInfo()
-    checker = Checker(tables, resolver, info, filename, enabled)
+    checker = Checker(tables, resolver, info, filename, enabled, strict)
+
+    # Strict safety mode: raw C++ blocks need an explicit unsafe context.
+    if strict:
+        def check_cpp1(items: list) -> None:
+            for item in items:
+                if isinstance(item, ast.Cpp1Block):
+                    checker.error(
+                        "a 'cpp1' block requires an 'unsafe' context in strict "
+                        "safety mode; move it into an unsafe function or disable "
+                        "strict safety",
+                        item,
+                    )
+                elif isinstance(item, ast.NamespaceDecl) and item.kind == "=":
+                    check_cpp1(item.members)
+                elif isinstance(item, ast.TypeDecl) and item.kind == "=":
+                    check_cpp1(item.members)
+
+        check_cpp1(tu.items)
 
     # Data members may not be borrows.
     for type_decl in tables.types.values():

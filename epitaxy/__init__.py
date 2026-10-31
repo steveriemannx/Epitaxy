@@ -7,5 +7,5 @@ borrow checking model (``unique<T>``, ``shared<T>``, ``in T`` / ``inout T``
 borrows and an ``unsafe`` boundary).
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __license__ = "MIT"

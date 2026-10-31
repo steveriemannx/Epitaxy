@@ -508,6 +508,207 @@ decltype(auto) as(X&& value) {
 }
 
 // ---------------------------------------------------------------------------
+// Checked arithmetic (strict safety mode)
+// ---------------------------------------------------------------------------
+//
+// In strict safety mode Epitaxy lowers +, -, *, +=, -=, *=, ++, -- and shifts
+// to these helpers.  An overflow is reported through the type_safety contract
+// group and then aborts: unlike ordinary contracts it cannot be deactivated,
+// so strict-mode code never depends on a custom handler returning.
+
+[[noreturn]] inline void arithmetic_overflow() noexcept {
+    type_safety.report_violation("integer arithmetic overflow");
+    std::abort();
+}
+
+template <class A, class B>
+constexpr decltype(auto) checked_add(A&& a, B&& b) {
+    using UA = std::remove_cvref_t<A>;
+    using UB = std::remove_cvref_t<B>;
+    if constexpr (std::is_integral_v<UA> && std::is_integral_v<UB> &&
+                  !std::is_same_v<UA, bool> && !std::is_same_v<UB, bool>) {
+        UA av = a;
+        UB bv = b;
+        using R = decltype(av + bv);
+        R result{};
+        if (__builtin_add_overflow(av, bv, &result)) {
+            arithmetic_overflow();
+        }
+        return result;
+    } else {
+        return std::forward<A>(a) + std::forward<B>(b);
+    }
+}
+
+template <class A, class B>
+constexpr decltype(auto) checked_sub(A&& a, B&& b) {
+    using UA = std::remove_cvref_t<A>;
+    using UB = std::remove_cvref_t<B>;
+    if constexpr (std::is_integral_v<UA> && std::is_integral_v<UB> &&
+                  !std::is_same_v<UA, bool> && !std::is_same_v<UB, bool>) {
+        UA av = a;
+        UB bv = b;
+        using R = decltype(av - bv);
+        R result{};
+        if (__builtin_sub_overflow(av, bv, &result)) {
+            arithmetic_overflow();
+        }
+        return result;
+    } else {
+        return std::forward<A>(a) - std::forward<B>(b);
+    }
+}
+
+template <class A, class B>
+constexpr decltype(auto) checked_mul(A&& a, B&& b) {
+    using UA = std::remove_cvref_t<A>;
+    using UB = std::remove_cvref_t<B>;
+    if constexpr (std::is_integral_v<UA> && std::is_integral_v<UB> &&
+                  !std::is_same_v<UA, bool> && !std::is_same_v<UB, bool>) {
+        UA av = a;
+        UB bv = b;
+        using R = decltype(av * bv);
+        R result{};
+        if (__builtin_mul_overflow(av, bv, &result)) {
+            arithmetic_overflow();
+        }
+        return result;
+    } else {
+        return std::forward<A>(a) * std::forward<B>(b);
+    }
+}
+
+template <class A>
+constexpr decltype(auto) checked_neg(A&& a) {
+    using UA = std::remove_cvref_t<A>;
+    if constexpr (std::is_integral_v<UA> && !std::is_same_v<UA, bool>) {
+        UA av = a;
+        UA result{};
+        if (__builtin_sub_overflow(UA{}, av, &result)) {
+            arithmetic_overflow();
+        }
+        return result;
+    } else {
+        return -std::forward<A>(a);
+    }
+}
+
+template <class A, class B>
+constexpr A& checked_add_assign(A& lhs, B&& rhs) {
+    if constexpr (std::is_integral_v<A> && std::is_integral_v<std::remove_cvref_t<B>> &&
+                  !std::is_same_v<A, bool> && !std::is_same_v<std::remove_cvref_t<B>, bool>) {
+        if (__builtin_add_overflow(lhs, rhs, &lhs)) {
+            arithmetic_overflow();
+        }
+    } else {
+        lhs += std::forward<B>(rhs);
+    }
+    return lhs;
+}
+
+template <class A, class B>
+constexpr A& checked_sub_assign(A& lhs, B&& rhs) {
+    if constexpr (std::is_integral_v<A> && std::is_integral_v<std::remove_cvref_t<B>> &&
+                  !std::is_same_v<A, bool> && !std::is_same_v<std::remove_cvref_t<B>, bool>) {
+        if (__builtin_sub_overflow(lhs, rhs, &lhs)) {
+            arithmetic_overflow();
+        }
+    } else {
+        lhs -= std::forward<B>(rhs);
+    }
+    return lhs;
+}
+
+template <class A, class B>
+constexpr A& checked_mul_assign(A& lhs, B&& rhs) {
+    if constexpr (std::is_integral_v<A> && std::is_integral_v<std::remove_cvref_t<B>> &&
+                  !std::is_same_v<A, bool> && !std::is_same_v<std::remove_cvref_t<B>, bool>) {
+        if (__builtin_mul_overflow(lhs, rhs, &lhs)) {
+            arithmetic_overflow();
+        }
+    } else {
+        lhs *= std::forward<B>(rhs);
+    }
+    return lhs;
+}
+
+template <class A, class B>
+constexpr A& checked_div_assign(A& lhs, B&& rhs) {
+    lhs = static_cast<A>(div(lhs, std::forward<B>(rhs)));
+    return lhs;
+}
+
+template <class A, class B>
+constexpr A& checked_mod_assign(A& lhs, B&& rhs) {
+    lhs = static_cast<A>(mod(lhs, std::forward<B>(rhs)));
+    return lhs;
+}
+
+template <class A>
+constexpr A& checked_inc(A& value) {
+    if constexpr (std::is_integral_v<A> && !std::is_same_v<A, bool>) {
+        if (__builtin_add_overflow(value, A{1}, &value)) {
+            arithmetic_overflow();
+        }
+        return value;
+    } else {
+        return ++value;
+    }
+}
+
+template <class A>
+constexpr A& checked_dec(A& value) {
+    if constexpr (std::is_integral_v<A> && !std::is_same_v<A, bool>) {
+        if (__builtin_sub_overflow(value, A{1}, &value)) {
+            arithmetic_overflow();
+        }
+        return value;
+    } else {
+        return --value;
+    }
+}
+
+template <class A, class B>
+constexpr decltype(auto) checked_shl(A&& a, B&& b) {
+    using UA = std::remove_cvref_t<A>;
+    using UB = std::remove_cvref_t<B>;
+    if constexpr (std::is_integral_v<UA> && std::is_integral_v<UB>) {
+        UB shift = b;
+        bool bad = false;
+        if constexpr (std::is_signed_v<UB>) {
+            bad = shift < 0;
+        }
+        if (bad || static_cast<unsigned long long>(shift) >= sizeof(UA) * 8) {
+            type_safety.report_violation("shift count is out of range");
+            std::abort();
+        }
+        return static_cast<UA>(a << shift);
+    } else {
+        return std::forward<A>(a) << std::forward<B>(b);
+    }
+}
+
+template <class A, class B>
+constexpr decltype(auto) checked_shr(A&& a, B&& b) {
+    using UA = std::remove_cvref_t<A>;
+    using UB = std::remove_cvref_t<B>;
+    if constexpr (std::is_integral_v<UA> && std::is_integral_v<UB>) {
+        UB shift = b;
+        bool bad = false;
+        if constexpr (std::is_signed_v<UB>) {
+            bad = shift < 0;
+        }
+        if (bad || static_cast<unsigned long long>(shift) >= sizeof(UA) * 8) {
+            type_safety.report_violation("shift count is out of range");
+            std::abort();
+        }
+        return static_cast<UA>(a >> shift);
+    } else {
+        return std::forward<A>(a) >> std::forward<B>(b);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Ranges: a..<b and a..=b
 // ---------------------------------------------------------------------------
 //
@@ -666,5 +867,18 @@ using epi::unchecked_dereference;
 using epi::unchecked_mod;
 using epi::unchecked_narrow;
 using epi::unchecked_subscript;
+using epi::checked_add;
+using epi::checked_add_assign;
+using epi::checked_dec;
+using epi::checked_div_assign;
+using epi::checked_mod_assign;
+using epi::checked_inc;
+using epi::checked_mul;
+using epi::checked_mul_assign;
+using epi::checked_neg;
+using epi::checked_shl;
+using epi::checked_shr;
+using epi::checked_sub;
+using epi::checked_sub_assign;
 
 #endif  // EPITAXY_SUPPORT_HPP_INCLUDED

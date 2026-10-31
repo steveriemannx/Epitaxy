@@ -1,0 +1,14 @@
+#include <iostream>
+
+raw_print: unsafe () = {
+    cpp1 {
+        std::cout << "raw C++ inside an unsafe context\n";
+    }
+}
+
+main: () = {
+    unsafe {
+        raw_print();
+    }
+    std::cout << "safe Epitaxy code continues\n";
+}

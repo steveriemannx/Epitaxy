@@ -266,6 +266,13 @@ objects with `is_active()` and `report_violation(std::string)`.
   replaced handler and can be disabled by deactivating the group.
 * Ownership/borrow/move/unsafe rules are checked statically before lowering and
   are on by default; `-no-ownership-checks` disables them.
+* Strict safety mode (`-strict-safety`) forces every check on, lowers integer
+  arithmetic to checked helpers and requires raw C++ (`cpp1`) to be inside
+  `unsafe`. Its conditional guarantee and trust boundary are documented in
+  [`SAFETY.md`](SAFETY.md).
+* Epitaxy is **not Rust-certified**: no data-race/`Send`-`Sync` analysis, no NLL,
+  and C++ interop is a trusted boundary. See [`SAFETY.md`](SAFETY.md) for the full
+  comparison and the path to an unconditional guarantee.
 
 ### 3.10 `main`
 
@@ -438,6 +445,11 @@ In 0.4.0: `cpp1 { ... }` raw C++ blocks (namespace/type/statement scope) and a
 default curated C++ standard-library prelude (`-no-prelude` to disable) were
 added as explicit interop escape hatches; this does not enable implicit mixed
 source mode.
+
+In 0.5.0: **strict safety mode** (`-strict-safety`) with mandatory checks,
+checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
+`unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
+non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
 
 ## 5. What "syntax requirement" means here
 

@@ -109,6 +109,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="do not pre-include the C++ standard-library headers",
     )
+    parser.add_argument(
+        "-strict-safety",
+        dest="strict_safety",
+        action="store_true",
+        help="enforce the strict safety guarantee (all checks on, checked "
+        "arithmetic, no raw C++ outside unsafe)",
+    )
     parser.add_argument("--version", action="version", version=f"Epitaxy {__version__} (MIT)")
     return parser
 
@@ -128,6 +135,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         index = raw.index("--")
         raw, program_args = raw[:index], raw[index + 1 :]
     args = build_arg_parser().parse_args(raw)
+    if args.strict_safety and not all(
+        [
+            args.subscript_checks,
+            args.null_checks,
+            args.div_checks,
+            args.sign_checks,
+            args.ownership_checks,
+        ]
+    ):
+        print(
+            "epitaxy: error: -strict-safety cannot be combined with -no-* checks",
+            file=sys.stderr,
+        )
+        return 2
+
     options = Options(
         subscript_checks=args.subscript_checks,
         null_checks=args.null_checks,
@@ -135,6 +157,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         sign_checks=args.sign_checks,
         ownership_checks=args.ownership_checks,
         preload_std=args.preload_std,
+        strict_safety=args.strict_safety,
     )
 
     files = [Path(f) for f in args.files]

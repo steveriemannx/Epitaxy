@@ -1,0 +1,5 @@
+main: () = {
+    cpp1 {
+        int raw_value = 1;
+    }
+}

@@ -117,6 +117,7 @@ class Options:
     sign_checks: bool = True
     ownership_checks: bool = True
     preload_std: bool = True
+    strict_safety: bool = False
 
 
 class FnCtx:
@@ -2264,7 +2265,10 @@ class CodeGen:
         return f"({self.cxpr(node.expr, ctx)})"
 
     def _expr_unary(self, node: ast.Unary, ctx) -> str:
-        return f"({node.op}{self.cxpr(node.expr, ctx)})"
+        inner = self.cxpr(node.expr, ctx)
+        if node.op == "-" and self.options.strict_safety:
+            return f"::epi::checked_neg({inner})"
+        return f"({node.op}{inner})"
 
     def _expr_postfix(self, node: ast.Postfix, ctx) -> str:
         op = node.op
@@ -2276,9 +2280,9 @@ class CodeGen:
         if op == "~":
             return f"(~{inner})"
         if op == "++":
-            return f"(++{inner})"
+            return f"::epi::checked_inc({inner})" if self.options.strict_safety else f"(++{inner})"
         if op == "--":
-            return f"(--{inner})"
+            return f"::epi::checked_dec({inner})" if self.options.strict_safety else f"(--{inner})"
         if op == "$":
             return inner
         self.fail(f"unsupported postfix operator '{op}'", node)
@@ -2293,6 +2297,16 @@ class CodeGen:
             return f"::epi::div({lhs}, {rhs})" if self.options.div_checks else f"({lhs} / {rhs})"
         if op == "%":
             return f"::epi::mod({lhs}, {rhs})" if self.options.div_checks else f"({lhs} % {rhs})"
+        if self.options.strict_safety:
+            checked = {
+                "+": "checked_add",
+                "-": "checked_sub",
+                "*": "checked_mul",
+                "<<": "checked_shl",
+                ">>": "checked_shr",
+            }.get(op)
+            if checked is not None:
+                return f"::epi::{checked}({lhs}, {rhs})"
         return f"({lhs} {op} {rhs})"
 
     def _expr_comparechain(self, node: ast.CompareChain, ctx) -> str:
@@ -2318,6 +2332,17 @@ class CodeGen:
         if isinstance(node.lhs, ast.Id) and node.lhs.name == "_":
             return f"((void)({rhs}))"
         lhs = self.cxpr(node.lhs, ctx)
+        if node.op in ("/=", "%=") and self.options.div_checks:
+            helper = "checked_div_assign" if node.op == "/=" else "checked_mod_assign"
+            return f"::epi::{helper}({lhs}, {rhs})"
+        if self.options.strict_safety:
+            assign_helpers = {
+                "+=": "checked_add_assign",
+                "-=": "checked_sub_assign",
+                "*=": "checked_mul_assign",
+            }.get(node.op)
+            if assign_helpers is not None:
+                return f"::epi::{assign_helpers}({lhs}, {rhs})"
         return f"({lhs} {node.op} {rhs})"
 
     def _expr_call(self, node: ast.Call, ctx) -> str:

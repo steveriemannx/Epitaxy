@@ -159,7 +159,11 @@ Notes on specific lowerings:
   `if (preds && group.is_active() && !(cond)) group.report_violation(msg)`.
 * **Safety** — checked operations call helpers in the support header
   (`epi::subscript`, `epi::deref`, `epi::div`, `epi::mod`) or comparison helpers
-  (`epi::cmp_lt`, …); the CLI flags select unprotected lowerings.
+  (`epi::cmp_lt`, …); the CLI flags select unprotected lowerings. In strict
+  safety mode the arithmetic operators are lowered to `epi::checked_add/sub/mul`,
+  `checked_*_assign`, `checked_inc/dec`, `checked_neg` and `checked_shl/shr`,
+  which abort on overflow/shift errors, and `cpp1` blocks require an `unsafe`
+  context (enforced in the ownership pass). See [`SAFETY.md`](SAFETY.md).
 * **`inspect`** — lowered to an immediately-invoked lambda that evaluates the
   subject once and tests alternatives in order.
 * **String interpolation** — concatenation with `epi::to_string`, or

@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.4 (draft)**
+**Version 0.5 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -1064,6 +1064,23 @@ default report-and-terminate handler, `set_handler` replaces it and
 ---
 
 ## 10. Safety
+
+Epitaxy 0.5 has two safety levels; the precise contract is documented in
+[`SAFETY.md`](SAFETY.md).
+
+* **Default** — the checks below are on by default and may be disabled.
+* **Strict** (`-strict-safety`) — every check is forced on, `cpp1` blocks and raw
+  pointers require an `unsafe` context, and the arithmetic operators `+`, `-`,
+  `*`, `<<`, `>>`, `+=`, `-=`, `*=`, `++`, `--`, unary `-`, `/=` and `%=` are
+  lowered to checked helpers that abort on integer overflow, invalid shifts or
+  division by zero. Disabling flags are rejected in combination with
+  `-strict-safety`.
+
+The conditional guarantee of strict mode is: Epitaxy code with no `unsafe`,
+`cpp1`, raw pointers or `unchecked_*` operations cannot trigger undefined
+behaviour through Epitaxy's own lowered operations. Calls into C++ are a trust
+boundary: the C++ standard library, third-party libraries and `unsafe` code are
+assumed to be correct.
 
 The following checks are on by default and can be disabled per translation unit
 with the CLI flags shown, or avoided at a specific operation with the

@@ -253,6 +253,7 @@ usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
 | `-q` | suppress informational messages |
 | `-no-*-checks` | disable a default-on safety check (`name`, `null`, `div-zero`, `comparison`, `ownership`) |
 | `-no-prelude` | do not pre-include the curated C++ standard-library headers |
+| `-strict-safety` | strict safety mode: all checks mandatory, checked arithmetic, `cpp1` only inside `unsafe` |
 | `--version` | print the compiler version |
 
 Environment variables: `CXX` selects the C++ compiler and `CXXFLAGS` adds extra
@@ -313,6 +314,25 @@ CXX=clang++ python3 tests/run_tests.py
   what is intentionally different, and what is not implemented in 0.2.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — how the compiler is built and why.
 
+## Safety guarantees
+
+Epitaxy has two safety levels, documented in detail in
+[`docs/SAFETY.md`](docs/SAFETY.md):
+
+* **Default** — ownership/borrow checking, bounds/null/div-zero/sign checks and
+  an `unsafe` boundary for raw pointers. Individual checks can be disabled;
+  this is best-effort, not a guarantee.
+* **Strict** (`-strict-safety`) — all checks forced on, integer arithmetic
+  checked, `cpp1` blocks only inside `unsafe`. This is the level with a
+  **conditional guarantee**: Epitaxy code without `unsafe`/`cpp1`/raw pointers
+  cannot trigger undefined behaviour *through Epitaxy's own operations*; C++
+  calls remain a trusted boundary.
+
+Epitaxy is **not Rust-certified**: there is no `Send`/`Sync` data-race checking,
+borrow lifetimes are lexical (no NLL), and safe C++ interop is trusted. An
+unconditional "safe code has no UB" guarantee would require an owned
+backend/runtime — see [`docs/SAFETY.md`](docs/SAFETY.md) §8.
+
 ## Interop model
 
 Epitaxy is a **new language**, not a "C++ syntax mode", so **implicit
@@ -349,6 +369,8 @@ of `<algorithm>`, `<map>`, `<numeric>`, `<optional>`, `<variant>`, `<chrono>`,
 * The borrow checker uses lexical borrow lifetimes (no NLL), has no lifetime
   polymorphism beyond explicit `-> in(param) T` annotations, and does not model
   C++ libraries, threads/data races or `Send`/`Sync`.
+* Safety is a **checked subset with an explicit trust boundary**, not a
+  Rust-style blanket guarantee; see [`docs/SAFETY.md`](docs/SAFETY.md).
 * Calls into C++ are trusted as safe unless they are declared `unsafe` in
   Epitaxy; raw pointer operations are gated by `unsafe`.
 * `cpp1 { ... }` blocks are raw C++ and are not analysed by the ownership
