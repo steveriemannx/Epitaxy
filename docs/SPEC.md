@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.13 (draft)**
+**Epitaxy / 磊晶** · **Version 0.13 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the

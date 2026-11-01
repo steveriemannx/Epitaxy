@@ -1,7 +1,11 @@
-# Epitaxy
+# Epitaxy（磊晶）
 
 **A small, from-scratch, MIT-licensed programming language with Cpp2 syntax that
 compiles to C++20.**
+
+**中文名：磊晶**——epitaxy 的台湾半导体业译法（大陆常称“外延”）。字面是“层叠生长的
+晶体”，对应 epitaxy 的本义：在衬底上按晶格取向生长出一层新的晶体；这也正是本项目的
+隐喻：在 C++ 衬底上生长出一层新的语言。
 
 Epitaxy is an independent implementation of the *syntax requirements* of
 [Cpp2 / cppfront](https://hsutter.github.io/cppfront/) — Herb Sutter's
