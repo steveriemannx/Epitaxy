@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.12 (draft)**
+**Version 0.13 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -1341,24 +1341,36 @@ underlying C++ compiler.
 
 ## 14. Project tooling (Cargo-like)
 
-The compiler also ships a minimal project model:
+The compiler ships a Cargo-like project model:
 
-* a directory with `Epitaxy.toml` is a project;
-* `[package]` provides `name`, `version` and an optional `entry` path
-  (default `src/main.ep`);
-* `[dependencies]` maps dependency names to path dependencies
-  (`dep = "../dep"` or `dep = { path = "../dep" }`);
+* a directory with `Epitaxy.toml` is a project; `[workspace] members = [...]`
+  makes it a workspace of member packages;
+* `[package]` provides `name`, `version`, an optional `entry` (default
+  `src/main.ep`) and an optional `[lib] path` library target;
+* `[dependencies]` supports path dependencies (`dep = "../dep"` or
+  `dep = { path = ... }`) and registry dependencies
+  (`dep = { version = "0.2", registry = "local" }`); registries are
+  `<name>-<version>/` directories searched via `EPITAXY_REGISTRY`,
+  `$EPITAXY_HOME/registry` or `~/.epitaxy/registry`;
+* `Epitaxy.lock` records resolved versions/sources and pins registry
+  dependencies;
 * every `.ep` file under `src/` is compiled; the entry file is the one without
   a `module` declaration, all other files must declare a module;
+* module names are namespaced per package in C++ (`module math;` in package
+  `util` is `epi_util_math`); imports may be same-package (unqualified) or
+  direct-dependency-qualified (`import util::math;`);
 * `tests/*.ep` are test programs built and run by `epitaxy test` (exit 0 is a
   pass);
-* commands: `epitaxy new <name>`, `epitaxy build`, `epitaxy run [-- args]`,
-  `epitaxy test`, `epitaxy check`;
+* commands: `epitaxy new <name> [--lib]`, `epitaxy build`, `epitaxy run
+  [-- args]`, `epitaxy test`, `epitaxy check`, with `-p/--package` selection
+  in workspaces;
+* builds are incremental: module C++/object/PCM artifacts are cached under
+  `target/epitaxy/` by content hash, and only changed modules are recompiled;
 * outputs go to `target/`; builds use the C++20 modules pipeline and therefore
   need GCC or upstream Clang.
 
-Future work: workspace members, registry dependencies, lockfiles, library
-targets, incremental builds and per-package module namespacing.
+Future work: publishing/registry protocol, multiple-version coexistence,
+workspace inheritance/features, per-package C++ symbol namespacing.
 
 ## 15. Compatibility
 

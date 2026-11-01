@@ -1,0 +1,5 @@
+module lib;
+
+pub: namespace = {
+    answer: () -> i32 = 42;
+}

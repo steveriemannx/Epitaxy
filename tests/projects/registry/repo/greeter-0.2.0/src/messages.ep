@@ -1,0 +1,5 @@
+module messages;
+
+greet: namespace = {
+    hello: () -> std::string = "hello from registry";
+}

@@ -1,0 +1,5 @@
+import greeter::messages;
+
+main: () = {
+    epi::println(greet::hello());
+}

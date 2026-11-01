@@ -460,6 +460,14 @@ checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
 
+In 0.13.0: the project model gains workspaces, local registries with version
+requirements, `Epitaxy.lock`, `[lib]` targets, incremental content-hash builds
+(`target/epitaxy/`, "compiled/cached") and per-package module namespaces
+(`module math;` in package `util` becomes `epi_util_math`; imports may be
+`import util::math;` for direct dependencies). Remaining: publishing/registry
+protocol, multiple-version coexistence, workspace inheritance/features,
+per-package C++ symbol namespacing.
+
 In 0.12.0: Cargo-like project model: `Epitaxy.toml` ([package],
 [dependencies] path deps), `src/` modules, `tests/*.ep`, `epitaxy
 new/build/run/test/check`, `target/` outputs; builds use the module pipeline.

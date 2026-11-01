@@ -571,10 +571,33 @@ class ProjectTests(unittest.TestCase):
             self.assertTrue((root / "src" / "main.ep").is_file())
             manifest = project.load_manifest(root)
             self.assertEqual(manifest.name, "demo")
-            entry, modules, packages = project.collect_sources(root)
-            self.assertEqual(entry, (root / "src" / "main.ep").resolve())
-            self.assertEqual(modules, [])
-            self.assertEqual(len(packages), 1)
+            workspace = project.load_workspace(root / "Epitaxy.toml")
+            package = workspace.packages["demo"]
+            sources = project.package_sources(package)
+            self.assertEqual(sources.entry, (root / "src" / "main.ep").resolve())
+            self.assertEqual(sources.modules, {})
+
+    def test_new_library_project(self):
+        from epitaxy import project
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = project.new_project("libdemo", Path(tmp), library=True)
+            manifest = project.load_manifest(root)
+            self.assertEqual(manifest.lib, "src/lib.ep")
+            workspace = project.load_workspace(root / "Epitaxy.toml")
+            sources = project.package_sources(workspace.packages["libdemo"])
+            self.assertIsNone(sources.entry)
+            self.assertIn("libdemo", sources.modules)
+
+    def test_version_requirements(self):
+        from epitaxy import project
+
+        self.assertTrue(project.version_satisfies("0.2.3", "0.2"))
+        self.assertTrue(project.version_satisfies("0.3.0", "^0.2"))
+        self.assertFalse(project.version_satisfies("1.0.0", "^0.2"))
+        self.assertTrue(project.version_satisfies("1.2.9", "~1.2"))
+        self.assertFalse(project.version_satisfies("1.3.0", "~1.2"))
+        self.assertTrue(project.version_satisfies("9.9.9", "*"))
 
     def test_project_path_dependency_sources(self):
         from epitaxy import project
@@ -590,7 +613,13 @@ class ProjectTests(unittest.TestCase):
             (dep / "src").mkdir(parents=True)
             (dep / "src" / "lib.ep").write_text("module util;\n")
             (dep / "Epitaxy.toml").write_text('[package]\nname = "util"\n')
-            entry, modules, packages = project.collect_sources(root)
-            self.assertEqual(entry, (root / "src" / "main.ep").resolve())
-            self.assertEqual(modules, [(dep / "src" / "lib.ep").resolve()])
-            self.assertEqual(len(packages), 2)
+            workspace = project.load_workspace(root / "Epitaxy.toml")
+            self.assertEqual(set(workspace.packages), {"app"})
+            app = workspace.packages["app"]
+            self.assertIn("util", app.dependencies)
+            app_sources = project.package_sources(app)
+            self.assertEqual(app_sources.entry, (root / "src" / "main.ep").resolve())
+            util_sources = project.package_sources(app.dependencies["util"], require_target=False)
+            self.assertEqual(
+                list(util_sources.modules.values()), [(dep / "src" / "lib.ep").resolve()]
+            )

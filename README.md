@@ -422,26 +422,56 @@ $ python3 -m epitaxy test           # builds and runs tests/*.ep
 $ python3 -m epitaxy check          # parse/lower every source file
 ```
 
-Minimal manifest:
+Manifest:
 
 ```toml
 [package]
-name = "myapp"
+name = "app"
 version = "0.1.0"
+entry = "src/main.ep"            # optional (default)
+# [lib] path = "src/lib.ep"      # optional library target
 
 [dependencies]
-util = "../util"                 # path dependency (shorthand)
-util = { path = "../util" }      # or an inline table
+util = "../util"                         # path dependency
+util = { path = "../util" }              # inline table form
+greeter = { version = "0.2", registry = "local" }
 ```
 
+Implemented project features:
+
+* **workspaces** — a root `Epitaxy.toml` with `[workspace] members = [...]`;
+  build/run/test all members, or select one with `-p/--package`; `epitaxy run`
+  picks the single binary or requires `-p`;
+* **library targets** — `[lib] path = "src/lib.ep"` (and `epitaxy new --lib`);
+  `epitaxy build` produces `target/lib<name>.a`; library packages are also
+  importable by dependents;
+* **path dependencies** — `dep = "../dep"` or `{ path = ... }`;
+* **local registries** — `dep = { version = "^0.2", registry = "local" }`.
+  A registry is a directory of `<name>-<version>/` packages; the search path is
+  `EPITAXY_REGISTRY` (`os.pathsep`-separated), else `$EPITAXY_HOME/registry`,
+  else `~/.epitaxy/registry`. Requirements support `*`, `^`, `~` and bare
+  (caret) versions;
+* **lockfile** — `Epitaxy.lock` records resolved package versions/sources and
+  is used to pin registry dependencies on later builds;
+* **incremental builds** — generated module C++/objects/PCMs are cached in
+  `target/epitaxy/` keyed by a content hash (module C++ + compiler + flags +
+  dependency hashes); unchanged modules are reported as `cached`, and the
+  entry/link only reruns when something changed;
+* **per-package module namespaces** — `module math;` inside package `util`
+  becomes the C++ module `epi_util_math`; imports inside a package may be
+  unqualified (`import math;`) or package-qualified for direct dependencies
+  (`import util::math;`). C++ *symbol* names remain global, so cross-package
+  symbol collisions are reported by the C++ compiler.
+
 Project builds use the C++20 modules pipeline, so they need a module-capable
-compiler (GCC or upstream Clang); `--cc` selects one explicitly. A dependency's
-`src/` modules are compiled together with the root project's modules and share
-one flat module namespace for now (import the declared module names). Build
-outputs go to `target/`. This is the first Cargo-like step: manifests, the
-`src/`/`tests/` layout, path dependencies, and build/run/test/check commands —
-workspace members, a package registry, lockfiles and `--lib` targets are future
-work.
+compiler (GCC or upstream Clang); `--cc` selects one explicitly. Build outputs
+go to `target/`.
+
+Remaining gaps: no publishing/registry protocol or authentication, no
+multiple-version coexistence (duplicate package names across the graph are
+rejected), no workspace inheritance/default-members/features, no per-package
+C++ symbol namespacing, and the cache is local (not content-addressed across
+machines).
 
 ## Interop model
 

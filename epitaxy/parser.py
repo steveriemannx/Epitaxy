@@ -170,15 +170,16 @@ class Parser:
                 self.expect(";", "';' after a module declaration")
                 items.append(ast.ModuleDecl(name=name, line=t.line, col=t.col))
                 continue
-            if (
-                self.at_ident("import")
-                and self.peek(1).kind == IDENT
-                and self.peek(2).text == ";"
-            ):
+            if self.at_ident("import") and self.peek(1).kind == IDENT:
                 t = self.advance()
-                name = self.advance().text
+                parts = [self.advance().text]
+                while self.at("::"):
+                    self.advance()
+                    parts.append(self.expect_ident("a module name after '::'").text)
                 self.expect(";", "';' after an import declaration")
-                items.append(ast.ImportDecl(name=name, line=t.line, col=t.col))
+                items.append(
+                    ast.ImportDecl(name="::".join(parts), line=t.line, col=t.col)
+                )
                 continue
             if self.kind() == PREPROC:
                 t = self.advance()

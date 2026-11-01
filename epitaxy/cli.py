@@ -53,25 +53,28 @@ def _project_command(argv: list[str]) -> int:
         parser.add_argument(
             "--path", default=".", help="parent directory (default: current)"
         )
+        parser.add_argument(
+            "--lib", action="store_true", help="create a library package"
+        )
         args = parser.parse_args(rest)
         try:
-            root = project.new_project(args.name, Path(args.path))
+            root = project.new_project(args.name, Path(args.path), library=args.lib)
         except project.ProjectError as exc:
             print(f"epitaxy: error: {exc}", file=sys.stderr)
             return 1
         print(f"created {root}")
         print("  Epitaxy.toml")
-        print("  src/main.ep")
+        print("  src/lib.ep" if args.lib else "  src/main.ep")
         print("  .gitignore")
         print()
         print("next:")
         print(f"  cd {args.name}")
-        print("  epitaxy run")
+        print("  epitaxy build" if args.lib else "  epitaxy run")
         return 0
 
     parser = argparse.ArgumentParser(
         prog=f"epitaxy {command}",
-        description="build, run, test or check an Epitaxy project",
+        description="build, run, test or check an Epitaxy project/workspace",
     )
     parser.add_argument("--cc", default=None, help="C++ compiler used for the module build")
     parser.add_argument("-q", "--quiet", action="store_true")
@@ -81,15 +84,17 @@ def _project_command(argv: list[str]) -> int:
     parser.add_argument("--safe-only", dest="safe_only", action="store_true")
     parser.add_argument("-strict-safety", dest="strict_safety", action="store_true")
     parser.add_argument("--release", action="store_true", help="accepted for compatibility")
-    if command == "run":
-        if "--" in rest:
-            index = rest.index("--")
-            program_args = rest[index + 1 :]
-            rest = rest[:index]
-        else:
-            program_args = []
-    else:
-        program_args = []
+    parser.add_argument(
+        "-p",
+        "--package",
+        default=None,
+        help="only build/run/test this workspace member",
+    )
+    program_args: list[str] = []
+    if command == "run" and "--" in rest:
+        index = rest.index("--")
+        program_args = rest[index + 1 :]
+        rest = rest[:index]
     args = parser.parse_args(rest)
 
     if args.sanitize:
@@ -104,21 +109,26 @@ def _project_command(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 2
-    root = manifest.parent
     try:
+        workspace = project.load_workspace(manifest)
         if command == "build":
-            output = project.build_project(root, args.cc, args.quiet, args.keep)
-            if not args.quiet:
-                print(f"epitaxy: built {output}", file=sys.stderr)
-            return 0
+            code = project.build_workspace(
+                workspace, args.cc, args.quiet, args.keep, args.package
+            )
+            if code == 0 and not args.quiet:
+                print(f"epitaxy: built target(s) in {workspace.root / 'target'}", file=sys.stderr)
+            return code
         if command == "run":
-            return project.run_project(
-                root, args.cc, args.quiet, args.keep, program_args
+            return project.run_workspace(
+                workspace, args.cc, args.quiet, args.keep, args.package,
+                program_args,
             )
         if command == "test":
-            return project.test_project(root, args.cc, args.quiet, args.keep)
+            return project.test_workspace(
+                workspace, args.cc, args.quiet, args.keep, args.package
+            )
         if command == "check":
-            return project.check_project(root)
+            return project.check_workspace(workspace, args.package)
     except project.ProjectError as exc:
         print(f"epitaxy: error: {exc}", file=sys.stderr)
         return 1

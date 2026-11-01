@@ -1,0 +1,5 @@
+import util::math;
+
+main: () = {
+    epi::println("add=", math::add(2, 3));
+}

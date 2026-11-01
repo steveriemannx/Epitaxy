@@ -66,11 +66,21 @@ links the entry file. Compiler support is detected by compiling a tiny probe
 module with both pipelines.
 
 `epitaxy/project.py` implements the Cargo-like project layer: a small TOML
-subset parser (works on Python 3.10, which lacks `tomllib`), manifest/package
-loading with recursive path dependencies, `src/**/*.ep` collection (the root
-entry is the file without a module declaration), `target/` output paths and the
-`new/build/run/test/check` commands. Project builds reuse the C++20 modules
-driver; test files are built as separate entry programs and must exit 0.
+subset parser (works on Python 3.10, which lacks `tomllib`), manifest/workspace
+loading, path and registry dependency resolution (local directory registries,
+version requirements, `Epitaxy.lock` pinning), `src/**/*.ep` collection (the
+root entry is the file without a module declaration), per-package module
+namespacing (`epi_<pkg>_<module>`), `target/` output paths and the
+`new/build/run/test/check` commands.
+
+The build compiles the dependency closure's modules in topological order into
+`target/epitaxy/` with a content-hash cache: each module's generated C++,
+compiler, flags and dependency hashes are hashed; unchanged modules and PCMs
+are reused ("cached"), and the entry/link step only reruns when something it
+depends on changed. GCC uses `-fmodules-ts` with `gcm.cache`; upstream Clang
+uses precompiled `.pcm` files plus `-fmodule-file=`. Library targets archive
+their own module objects with `ar`; test files are built as separate entry
+programs and must exit 0.
 
 The generated file starts with the user's preprocessor lines, then (unless
 `-no-prelude`) a curated C++ standard-library prelude, then `epi_support.hpp` and
