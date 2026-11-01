@@ -1,0 +1,6 @@
+import math;
+
+main: () = {
+    p := geo::make_point(4, 5);
+    epi::println("sum=", p.sum());
+}

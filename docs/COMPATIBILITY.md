@@ -129,7 +129,9 @@ The short list is:
 * **Implicit mixed Cpp1/Cpp2 source**: only preprocessor lines and explicit
   `cpp1 { ... }` blocks are passed through; C++ declarations/statements cannot be
   freely interleaved.
-* **Modules / multi-file builds**: none.
+* **Modules / multi-file builds**: a GCC-only C++20 modules prototype
+  (`--cpp-modules`) exists; no export lists, partitions, implementation units,
+  `import std;` or general project builds.
 * **Full `is`/`as`**: no template-name, concept or value-predicate queries; no
   `std::expected` or user customization.
 * **`out` parameter construction semantics**: plain references, no guaranteed
@@ -455,6 +457,12 @@ In 0.5.0: **strict safety mode** (`-strict-safety`) with mandatory checks,
 checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
+
+In 0.10.0: a prototype C++20 modules build (`--cpp-modules`) maps
+`module name;`/`import name;` to `export module epi_<name>;`/
+`import epi_<name>;`, builds the dependency graph and drives GCC module
+compilation (`-fmodules-ts`). GCC-only, single-identifier modules, no
+partitions/export lists/`import std`, imports not transitive.
 
 In 0.9.0: `--safe-only` mode rejects all user-written C++ interop before
 ownership checking (preprocessor, `cpp1`, `unsafe`, raw pointers, external C++

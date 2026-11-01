@@ -160,6 +160,26 @@ class Parser:
         items = []
         start = self.tok
         while self.kind() != EOF:
+            if (
+                self.at_ident("module")
+                and self.peek(1).kind == IDENT
+                and self.peek(2).text == ";"
+            ):
+                t = self.advance()
+                name = self.advance().text
+                self.expect(";", "';' after a module declaration")
+                items.append(ast.ModuleDecl(name=name, line=t.line, col=t.col))
+                continue
+            if (
+                self.at_ident("import")
+                and self.peek(1).kind == IDENT
+                and self.peek(2).text == ";"
+            ):
+                t = self.advance()
+                name = self.advance().text
+                self.expect(";", "';' after an import declaration")
+                items.append(ast.ImportDecl(name=name, line=t.line, col=t.col))
+                continue
             if self.kind() == PREPROC:
                 t = self.advance()
                 items.append(ast.Preproc(text=t.text, line=t.line, col=t.col))

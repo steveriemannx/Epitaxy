@@ -197,6 +197,20 @@ class TypeDecl(Decl):
 
 
 @dataclass(kw_only=True)
+class ModuleDecl(Node):
+    """``module name;`` at the top of a translation unit (C++ modules mode)."""
+
+    name: str = ""
+
+
+@dataclass(kw_only=True)
+class ImportDecl(Node):
+    """``import name;`` (Epitaxy module import in C++ modules mode)."""
+
+    name: str = ""
+
+
+@dataclass(kw_only=True)
 class NamespaceDecl(Decl):
     name: str = ""
     kind: str = "="  # "=" or "=="

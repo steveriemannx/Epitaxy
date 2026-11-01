@@ -49,6 +49,7 @@ from epitaxy.diag import CompileError  # noqa: E402
 CASES_DIR = ROOT / "tests" / "cases"
 ERRORS_DIR = ROOT / "tests" / "errors"
 EXAMPLES_DIR = ROOT / "examples"
+MODULES_DIR = ROOT / "tests" / "modules"
 SUPPORT_DIR = ROOT / "epitaxy" / "support"
 
 CXX_FLAGS = ["-std=c++20", "-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-unused-label"]
@@ -210,6 +211,55 @@ def run_error_case(path: Path, cxx: str, keep: bool, verbose: bool) -> tuple[boo
             print(f"    kept: {workdir}", file=sys.stderr)
 
 
+def find_modules_cxx() -> str | None:
+    for candidate in (
+        os.environ.get("EPITAXY_MODULES_CXX"),
+        "g++-16",
+        "g++",
+    ):
+        if candidate and shutil.which(candidate):
+            try:
+                out = subprocess.run(
+                    [candidate, "--version"], capture_output=True, text=True, timeout=20
+                )
+            except Exception:
+                continue
+            if "GCC" in (out.stdout or "") + (out.stderr or ""):
+                return candidate
+    return None
+
+
+def run_module_case(cxx: str, keep: bool, verbose: bool) -> tuple[bool, str]:
+    entry = MODULES_DIR / "main.ep"
+    math = MODULES_DIR / "math.ep"
+    expected = (MODULES_DIR / "expected.txt").read_text(encoding="utf-8")
+    command = [
+        sys.executable,
+        "-m",
+        "epitaxy",
+        "--cpp-modules",
+        "--run",
+        "--cc",
+        cxx,
+        "-q",
+        str(entry),
+        str(math),
+    ]
+    try:
+        result = subprocess.run(
+            command, cwd=str(ROOT), capture_output=True, text=True, timeout=180
+        )
+    except subprocess.TimeoutExpired:
+        return False, "module build timed out"
+    if result.returncode != 0:
+        return False, "module build failed:\n" + result.stderr
+    if result.stdout != expected:
+        return False, f"module output mismatch\nexpected: {expected!r}\nactual: {result.stdout!r}"
+    if verbose:
+        print(f"    module output:\n{result.stdout}", file=sys.stderr)
+    return True, ""
+
+
 def run_example(path: Path, cxx: str, keep: bool, verbose: bool) -> tuple[bool, str]:
     try:
         cpp = transpile(path, Options())
@@ -266,6 +316,15 @@ def main(argv: list[str] | None = None) -> int:
             total += 1
             ok, details = run_example(path, cxx, args.keep, args.verbose)
             _report("example", path.name, ok, details, args.verbose)
+
+    if not args.filter:
+        modules_cxx = find_modules_cxx()
+        if modules_cxx is None:
+            print(f"{YELLOW}SKIP{RESET} module  C++20 modules (no GCC compiler found)")
+        else:
+            total += 1
+            ok, details = run_module_case(modules_cxx, args.keep, args.verbose)
+            _report("module", "cpp-modules", ok, details, args.verbose)
 
     print()
     if failures:

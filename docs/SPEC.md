@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.9 (draft)**
+**Version 0.10 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -148,6 +148,27 @@ The following multi-character tokens are recognised (longest match first):
 `@name` is a metafunction reference (only valid in type declarations).
 
 ---
+
+### 2.9 Modules (prototype)
+
+At namespace scope a file may begin with module and import declarations:
+
+```cpp2
+module math;
+import geometry;
+```
+
+They are meaningful only with the `--cpp-modules` build mode. A file with
+`module name;` is lowered to a C++20 module interface unit
+(`export module epi_<name>;`, with all top-level declarations exported);
+`import name;` becomes `import epi_<name>;`. The single input file without a
+module declaration is the entry translation unit and is the only file that may
+define `main`. Without `--cpp-modules` these declarations are compile-time
+errors.
+
+Prototype restrictions: GCC only, single-identifier module names, no module
+partitions, export lists, implementation units or `import std;`, and imports are
+not transitive.
 
 ## 3. Declarations
 
@@ -1281,6 +1302,8 @@ The checks can be disabled for a translation unit with `-no-ownership-checks`.
 * `cpp1 { ... }` blocks (namespace, type or statement scope) are emitted
   verbatim; they are opaque to the ownership checker and are an explicit escape
   hatch, not a mixed-source mode.
+* `--cpp-modules` generates C++20 module interface units for `module name;`
+  inputs and imports them from the entry translation unit (see section 2.3).
 * C++ names may be used directly: `std::vector`, `std::ranges::sort`,
   `std::cout`, `std::any`, and so on. C++20 CTAD, `[[nodiscard]]`, concepts and
   ranges are available.

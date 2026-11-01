@@ -51,6 +51,17 @@ Non-goals for 0.2:
  executable
 ```
 
+In `--cpp-modules` mode the generated module unit starts with `module;` (the
+global module fragment), then the user's preprocessor lines and the runtime
+includes, then `export module epi_<name>;`, the `import epi_<dep>;` lines and an
+`export { ... }` block around the whole generated program. The entry file is
+generated as an ordinary translation unit with the `import epi_<dep>;` lines
+after the includes. The CLI build driver parses each input to collect module
+names/imports, checks for duplicate names, cycles, missing modules and `main`
+in module files, topologically orders the modules, compiles each with GCC's
+`-fmodules-ts` (the BMI cache lives in the build directory), then compiles and
+links the entry file.
+
 The generated file starts with the user's preprocessor lines, then (unless
 `-no-prelude`) a curated C++ standard-library prelude, then `epi_support.hpp` and
 the lowered program. The prelude is a convenience layer only; C++ headers are

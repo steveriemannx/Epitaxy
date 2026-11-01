@@ -256,6 +256,7 @@ usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
 | `-strict-safety` | strict safety mode: all checks mandatory, checked arithmetic, `cpp1` only inside `unsafe` |
 | `--sanitize` | compile with `-fsanitize=address,undefined` under `--run`/`-c` (detection layer for C++-side UB) |
 | `--safe-only` | restrict the program to Epitaxy + the compiler runtime: no preprocessor, `cpp1`, `unsafe`, raw pointers, external C++ names, thread API or by-reference captures; implies `-strict-safety` |
+| `--cpp-modules` | prototype C++20 modules build: inputs with `module name;` become C++ modules, the single input without it is the entry point (currently requires GCC) |
 | `--version` | print the compiler version |
 
 Environment variables: `CXX` selects the C++ compiler and `CXXFLAGS` adds extra
@@ -356,6 +357,48 @@ code has no UB" promise: the compiler runtime itself (standard library calls
 inside `std::string`/format/I/O), recursion/stack exhaustion and resource
 exhaustion remain outside the guarantee — see
 [`docs/SAFETY.md`](docs/SAFETY.md).
+
+### C++20 modules (prototype)
+
+A minimal C++20 modules build mode is available. Mark library files with a
+module declaration and import them from the entry file:
+
+```cpp2
+// math.ep
+module math;
+
+geo: namespace = {
+    add: (a: i32, b: i32) -> i32 = a + b;
+}
+```
+
+```cpp2
+// main.ep
+import math;
+
+main: () = {
+    epi::println("add=", geo::add(2, 3));
+}
+```
+
+```console
+$ python3 -m epitaxy --cpp-modules --run --cc g++-16 main.ep math.ep
+add=5
+```
+
+Epitaxy builds the module dependency graph, generates one C++ module interface
+unit per `module name;` file (`export module epi_<name>;` with everything
+exported), generates the entry file as an ordinary translation unit with
+`import epi_<name>;` lines, compiles the modules in dependency order and links
+the executable.
+
+Prototype limitations: GCC only (Apple Clang has no C++20 module support in the
+current environment; GCC uses `-fmodules-ts` and its `gcm.cache`); module names
+are single identifiers; there are no module partitions, export lists,
+implementation units or `import std;`; every top-level name of a module is
+exported; the entry file is the only file allowed to define `main`; and imports
+are not transitive (import every module whose names you use). Single-file
+compilation is unaffected.
 
 ## Interop model
 

@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from . import __version__
+from . import __version__, ast
 from .codegen import Options
 from .compiler import transpile
 from .diag import CompileError
@@ -116,6 +116,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="compile with -fsanitize=address,undefined when using --run/-c",
     )
     parser.add_argument(
+        "--cpp-modules",
+        dest="cpp_modules",
+        action="store_true",
+        help="prototype C++20 modules build: every input with 'module name;' is "
+        "compiled as a C++ module, the single input without it is the entry "
+        "point (currently requires GCC)",
+    )
+    parser.add_argument(
         "--safe-only",
         dest="safe_only",
         action="store_true",
@@ -175,6 +183,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         safe_only=args.safe_only,
     )
 
+    if args.cpp_modules:
+        if args.emit_cpp or args.print_cpp:
+            print(
+                "epitaxy: error: --cpp-modules does not support --emit-cpp/--print-cpp",
+                file=sys.stderr,
+            )
+            return 2
+        return _build_cpp_modules(args, program_args)
+
     files = [Path(f) for f in args.files]
     if len(files) > 1 and (args.run or args.compile or args.output):
         print("epitaxy: error: -o/--run/-c accept a single input file", file=sys.stderr)
@@ -230,6 +247,248 @@ def _output_path(source: Path, output: Optional[str]) -> Path:
     if output:
         return Path(output)
     return source.with_suffix(".cpp")
+
+
+def _modules_cxx(args):
+    cxx = args.cc or find_cxx()
+    try:
+        version = subprocess.run(
+            [cxx, "--version"], capture_output=True, text=True, timeout=20
+        )
+    except Exception:
+        version = None
+    text = ""
+    if version is not None:
+        text = (version.stdout or "") + (version.stderr or "")
+    if "Free Software Foundation" in text or "GCC" in text or "g++" in text:
+        return cxx
+    print(
+        "epitaxy: error: the C++20 modules prototype currently requires GCC "
+        f"(g++); {cxx!r} does not provide the required module support. "
+        "Pass e.g. --cc g++-16.",
+        file=sys.stderr,
+    )
+    return None
+
+
+def _module_options(args) -> Options:
+    return Options(
+        subscript_checks=args.subscript_checks,
+        null_checks=args.null_checks,
+        div_checks=args.div_checks,
+        sign_checks=args.sign_checks,
+        ownership_checks=args.ownership_checks,
+        preload_std=args.preload_std,
+        strict_safety=args.strict_safety or args.safe_only,
+        safe_only=args.safe_only,
+    )
+
+
+def _build_cpp_modules(args, program_args: Optional[list[str]] = None) -> int:
+    from .compiler import transpile
+    from .diag import CompileError
+    from .parser import parse
+
+    cxx = _modules_cxx(args)
+    if cxx is None:
+        return 2
+    files = [Path(f) for f in args.files]
+    if not files:
+        print("epitaxy: error: --cpp-modules needs input .ep files", file=sys.stderr)
+        return 2
+
+    entry = None
+    module_files: dict[str, tuple[Path, list[str], object]] = {}
+    for path in files:
+        if not path.exists():
+            print(f"epitaxy: error: no such file: {path}", file=sys.stderr)
+            return 2
+        source = path.read_text(encoding="utf-8")
+        try:
+            tu = parse(source, str(path))
+        except CompileError as exc:
+            print(exc.render(), file=sys.stderr)
+            return 1
+        name = None
+        imports = []
+        for item in tu.items:
+            if isinstance(item, ast.ModuleDecl):
+                if name is not None:
+                    print(
+                        f"epitaxy: error: {path}: more than one 'module' declaration",
+                        file=sys.stderr,
+                    )
+                    return 1
+                name = item.name
+            elif isinstance(item, ast.ImportDecl):
+                imports.append(item.name)
+        if name is None:
+            if entry is not None:
+                print(
+                    "epitaxy: error: --cpp-modules needs exactly one entry file "
+                    "(an input without a 'module name;' declaration)",
+                    file=sys.stderr,
+                )
+                return 1
+            entry = (path, imports, tu)
+        else:
+            if name in module_files:
+                print(
+                    f"epitaxy: error: duplicate module '{name}' in "
+                    f"{module_files[name][0]} and {path}",
+                    file=sys.stderr,
+                )
+                return 1
+            module_files[name] = (path, imports, tu)
+    if entry is None:
+        print(
+            "epitaxy: error: --cpp-modules needs exactly one entry file without "
+            "a 'module name;' declaration",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Module files cannot define main.
+    def defines_main(items: list) -> bool:
+        for item in items:
+            if isinstance(item, ast.FunctionDecl) and item.name == "main":
+                return True
+            if isinstance(item, ast.NamespaceDecl) and item.kind == "=":
+                if defines_main(item.members):
+                    return True
+        return False
+
+    for name, (path, _imports, tu) in module_files.items():
+        if defines_main(tu.items):
+            print(
+                f"epitaxy: error: module '{name}' ({path}) must not define main; "
+                "put main in the entry file",
+                file=sys.stderr,
+            )
+            return 1
+
+    # Resolve imports and compute a dependency order.
+    state: dict[str, int] = {}
+    order: list[str] = []
+
+    def visit(name: str, stack: list) -> bool:
+        if state.get(name) == 2:
+            return True
+        if state.get(name) == 1:
+            cycle = " -> ".join(stack + [name])
+            print(
+                f"epitaxy: error: import cycle: {cycle}",
+                file=sys.stderr,
+            )
+            return False
+        state[name] = 1
+        stack.append(name)
+        for dep in module_files[name][1]:
+            if dep not in module_files:
+                print(
+                    f"epitaxy: error: module '{name}' imports unknown module "
+                    f"'{dep}'",
+                    file=sys.stderr,
+                )
+                return False
+            if not visit(dep, stack):
+                return False
+        stack.pop()
+        state[name] = 2
+        order.append(name)
+        return True
+
+    for name in module_files:
+        if not visit(name, []):
+            return 1
+    for dep in entry[1]:
+        if dep not in module_files:
+            print(
+                f"epitaxy: error: entry file imports unknown module '{dep}'",
+                file=sys.stderr,
+            )
+            return 1
+
+    workdir = Path(tempfile.mkdtemp(prefix="epitaxy-modules-"))
+    base_flags = [
+        *shlex.split(os.environ.get("CXXFLAGS", "")),
+        "-std=c++20",
+        "-fmodules-ts",
+        "-Wall",
+        "-Wextra",
+        "-Wno-unused-parameter",
+        "-Wno-unused-label",
+        "-I",
+        str(SUPPORT_DIR),
+    ]
+
+    def run(cmd: list[str]) -> bool:
+        if not args.quiet:
+            print("epitaxy: running " + " ".join(cmd), file=sys.stderr)
+        result = subprocess.run(cmd, cwd=str(workdir))
+        return result.returncode == 0
+
+    try:
+        objects: list[str] = []
+        for name in order:
+            path, imports, _tu = module_files[name]
+            options = _module_options(args)
+            options.cpp_module = name
+            options.cpp_module_imports = imports
+            cpp = transpile(path.read_text(encoding="utf-8"), str(path), options)
+            cppm = workdir / f"{name}.cppm"
+            cppm.write_text(cpp, encoding="utf-8")
+            obj = workdir / f"{name}.o"
+            command = [
+                cxx, *base_flags, "-x", "c++", "-c", str(cppm), "-o", str(obj)
+            ]
+            if not run(command):
+                print(
+                    f"epitaxy: error: compiling module '{name}' failed",
+                    file=sys.stderr,
+                )
+                return 1
+            objects.append(str(obj))
+
+        entry_path, entry_imports, _tu = entry
+        options = _module_options(args)
+        options.cpp_module_entry = True
+        options.cpp_module_imports = entry_imports
+        cpp = transpile(entry_path.read_text(encoding="utf-8"), str(entry_path), options)
+        entry_cpp = workdir / "main.cpp"
+        entry_cpp.write_text(cpp, encoding="utf-8")
+        entry_obj = workdir / "main.o"
+        command = [cxx, *base_flags, "-c", str(entry_cpp), "-o", str(entry_obj)]
+        if not run(command):
+            print("epitaxy: error: compiling the entry file failed", file=sys.stderr)
+            return 1
+
+        exe = workdir / "program"
+        command = [
+            cxx, *shlex.split(os.environ.get("CXXFLAGS", "")), "-std=c++20",
+            "-fmodules-ts", str(entry_obj), *objects, "-o", str(exe),
+        ]
+        if not run(command):
+            print("epitaxy: error: linking the module program failed", file=sys.stderr)
+            return 1
+
+        if args.output:
+            output_path = Path(args.output)
+            shutil.copy2(exe, output_path)
+            if not args.quiet:
+                print(f"epitaxy: executable written to {output_path}", file=sys.stderr)
+        if args.run:
+            program = subprocess.run([str(exe)] + list(program_args or []))
+            if program.returncode != 0:
+                return program.returncode
+        elif not args.quiet:
+            print(f"epitaxy: built executable at {exe}", file=sys.stderr)
+        if args.keep:
+            print(f"epitaxy: module build files kept in {workdir}", file=sys.stderr)
+        return 0
+    finally:
+        if not args.keep:
+            shutil.rmtree(workdir, ignore_errors=True)
 
 
 def _compile_and_run(cpp: str, source: Path, args, run: bool, program_args: Optional[list[str]] = None) -> int:

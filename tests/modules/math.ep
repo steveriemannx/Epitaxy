@@ -1,0 +1,16 @@
+module math;
+
+geo: namespace = {
+    point: type = {
+        public x: i32 = 0;
+        public y: i32 = 0;
+        sum: (this) -> i32 = x + y;
+    }
+
+    make_point: (a: i32, b: i32) -> point = {
+        p: point = ();
+        p.x = a;
+        p.y = b;
+        return p;
+    }
+}

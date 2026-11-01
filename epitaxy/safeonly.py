@@ -116,6 +116,8 @@ class _Validator:
 
     def visit_items(self, items: list, owner: str | None) -> None:
         for item in items:
+            if isinstance(item, (ast.ModuleDecl, ast.ImportDecl)):
+                continue
             if isinstance(item, ast.Preproc):
                 self.error(
                     item,

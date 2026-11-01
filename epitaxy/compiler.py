@@ -5,6 +5,7 @@ Source -> tokens -> AST -> ownership/borrow checking -> C++20.
 
 from __future__ import annotations
 
+from . import ast
 from .codegen import CodeGen, Options
 from .ownership import analyze
 from .parser import parse
@@ -26,6 +27,23 @@ def transpile(source: str, filename: str = "<input>", options: Options | None = 
         options.sign_checks = True
         options.ownership_checks = True
     tu = parse(source, filename)
+    has_module_decl = any(
+        isinstance(item, (ast.ModuleDecl, ast.ImportDecl)) for item in tu.items
+    )
+    if has_module_decl and options.cpp_module is None and not options.cpp_module_entry:
+        from .diag import CompileError
+
+        line = col = 0
+        for item in tu.items:
+            if isinstance(item, (ast.ModuleDecl, ast.ImportDecl)):
+                line, col = item.line, item.col
+                break
+        raise CompileError(
+            "'module'/'import' declarations require the --cpp-modules build mode",
+            line,
+            col,
+            filename,
+        )
     if options.safe_only:
         validate_safe_only(tu, filename)
     info = analyze(

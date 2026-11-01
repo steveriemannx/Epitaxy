@@ -356,6 +356,30 @@ class OwnershipTests(unittest.TestCase):
         self.assertIn("never continue into a null dereference", header)
         self.assertIn("never continue into an out-of-bounds access", header)
 
+    def test_cpp_module_codegen(self):
+        cpp = transpile(
+            "module math;\nadd: (a: i32, b: i32) -> i32 = a + b;",
+            "math.ep",
+            Options(cpp_module="math"),
+        )
+        self.assertIn("module;", cpp)
+        self.assertIn("export module epi_math;", cpp)
+        self.assertIn("export {", cpp)
+
+    def test_cpp_module_entry_imports(self):
+        cpp = transpile(
+            "import math;\nmain: () = { }",
+            "main.ep",
+            Options(cpp_module_entry=True, cpp_module_imports=["math"]),
+        )
+        self.assertIn("import epi_math;", cpp)
+        self.assertNotIn("export module", cpp)
+
+    def test_module_declarations_require_module_mode(self):
+        with self.assertRaises(CompileError) as ctx:
+            transpile("module math;\nmain: () = { }", "t.ep", Options())
+        self.assertIn("--cpp-modules", ctx.exception.message)
+
     def test_safe_only_accepts_pure_epitaxy(self):
         source = (
             "box: type = { public value: i32 = 0; }\n"
