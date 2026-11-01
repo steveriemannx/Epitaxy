@@ -1,0 +1,5 @@
+import greeting;
+
+main: () = {
+    epi::println("message=", greeting::message());
+}

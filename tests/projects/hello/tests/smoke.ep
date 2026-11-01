@@ -1,0 +1,10 @@
+import greeting;
+
+main: () = {
+    if greeting::message() != "hello from greeting" {
+        epi::println("smoke: wrong message");
+    }
+    else {
+        epi::println("smoke: ok");
+    }
+}

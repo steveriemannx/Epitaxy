@@ -1,0 +1,5 @@
+module greeting;
+
+greeting: namespace = {
+    message: () -> std::string = "hello from greeting";
+}

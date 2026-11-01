@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.11 (draft)**
+**Version 0.12 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -1339,7 +1339,28 @@ underlying C++ compiler.
 
 ---
 
-## 14. Compatibility
+## 14. Project tooling (Cargo-like)
+
+The compiler also ships a minimal project model:
+
+* a directory with `Epitaxy.toml` is a project;
+* `[package]` provides `name`, `version` and an optional `entry` path
+  (default `src/main.ep`);
+* `[dependencies]` maps dependency names to path dependencies
+  (`dep = "../dep"` or `dep = { path = "../dep" }`);
+* every `.ep` file under `src/` is compiled; the entry file is the one without
+  a `module` declaration, all other files must declare a module;
+* `tests/*.ep` are test programs built and run by `epitaxy test` (exit 0 is a
+  pass);
+* commands: `epitaxy new <name>`, `epitaxy build`, `epitaxy run [-- args]`,
+  `epitaxy test`, `epitaxy check`;
+* outputs go to `target/`; builds use the C++20 modules pipeline and therefore
+  need GCC or upstream Clang.
+
+Future work: workspace members, registry dependencies, lockfiles, library
+targets, incremental builds and per-package module namespacing.
+
+## 15. Compatibility
 
 See [`COMPATIBILITY.md`](COMPATIBILITY.md) for the exact status of each Cpp2
 feature in Epitaxy 0.2 and for deliberate semantic differences.

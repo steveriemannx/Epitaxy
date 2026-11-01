@@ -65,6 +65,13 @@ the interface with `-x c++-module --precompile` to a `.pcm`, then compile the
 links the entry file. Compiler support is detected by compiling a tiny probe
 module with both pipelines.
 
+`epitaxy/project.py` implements the Cargo-like project layer: a small TOML
+subset parser (works on Python 3.10, which lacks `tomllib`), manifest/package
+loading with recursive path dependencies, `src/**/*.ep` collection (the root
+entry is the file without a module declaration), `target/` output paths and the
+`new/build/run/test/check` commands. Project builds reuse the C++20 modules
+driver; test files are built as separate entry programs and must exit 0.
+
 The generated file starts with the user's preprocessor lines, then (unless
 `-no-prelude`) a curated C++ standard-library prelude, then `epi_support.hpp` and
 the lowered program. The prelude is a convenience layer only; C++ headers are

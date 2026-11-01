@@ -543,3 +543,54 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProjectTests(unittest.TestCase):
+    def test_manifest_subset(self):
+        from epitaxy import project
+
+        data = project.parse_manifest_text(
+            "[package]\n"
+            'name = "demo"\n'
+            'version = "1.2.3"\n'
+            "\n"
+            "[dependencies]\n"
+            'util = "../util"\n'
+            'other = { path = "../other" }\n'
+        )
+        self.assertEqual(data["package"]["name"], "demo")
+        self.assertEqual(data["dependencies"]["util"], "../util")
+        self.assertEqual(data["dependencies"]["other"]["path"], "../other")
+
+    def test_new_project_layout(self):
+        from epitaxy import project
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = project.new_project("demo", Path(tmp))
+            self.assertTrue((root / "Epitaxy.toml").is_file())
+            self.assertTrue((root / "src" / "main.ep").is_file())
+            manifest = project.load_manifest(root)
+            self.assertEqual(manifest.name, "demo")
+            entry, modules, packages = project.collect_sources(root)
+            self.assertEqual(entry, (root / "src" / "main.ep").resolve())
+            self.assertEqual(modules, [])
+            self.assertEqual(len(packages), 1)
+
+    def test_project_path_dependency_sources(self):
+        from epitaxy import project
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "app"
+            (root / "src").mkdir(parents=True)
+            (root / "src" / "main.ep").write_text("main: () = { }\n")
+            (root / "Epitaxy.toml").write_text(
+                '[package]\nname = "app"\n\n[dependencies]\nutil = "../util"\n'
+            )
+            dep = Path(tmp) / "util"
+            (dep / "src").mkdir(parents=True)
+            (dep / "src" / "lib.ep").write_text("module util;\n")
+            (dep / "Epitaxy.toml").write_text('[package]\nname = "util"\n')
+            entry, modules, packages = project.collect_sources(root)
+            self.assertEqual(entry, (root / "src" / "main.ep").resolve())
+            self.assertEqual(modules, [(dep / "src" / "lib.ep").resolve()])
+            self.assertEqual(len(packages), 2)

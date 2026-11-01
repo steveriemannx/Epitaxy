@@ -39,13 +39,103 @@ def find_cxx() -> str:
     return ""
 
 
+def _project_command(argv: list[str]) -> int:
+    from . import project
+    from .diag import CompileError
+
+    command = argv[0]
+    rest = argv[1:]
+    if command == "new":
+        parser = argparse.ArgumentParser(
+            prog="epitaxy new", description="create a new Epitaxy project"
+        )
+        parser.add_argument("name", help="project (directory) name")
+        parser.add_argument(
+            "--path", default=".", help="parent directory (default: current)"
+        )
+        args = parser.parse_args(rest)
+        try:
+            root = project.new_project(args.name, Path(args.path))
+        except project.ProjectError as exc:
+            print(f"epitaxy: error: {exc}", file=sys.stderr)
+            return 1
+        print(f"created {root}")
+        print("  Epitaxy.toml")
+        print("  src/main.ep")
+        print("  .gitignore")
+        print()
+        print("next:")
+        print(f"  cd {args.name}")
+        print("  epitaxy run")
+        return 0
+
+    parser = argparse.ArgumentParser(
+        prog=f"epitaxy {command}",
+        description="build, run, test or check an Epitaxy project",
+    )
+    parser.add_argument("--cc", default=None, help="C++ compiler used for the module build")
+    parser.add_argument("-q", "--quiet", action="store_true")
+    parser.add_argument("--keep", action="store_true", help="keep intermediate build files")
+    parser.add_argument("--sanitize", action="store_true",
+                        help="compile with ASan/UBSan")
+    parser.add_argument("--safe-only", dest="safe_only", action="store_true")
+    parser.add_argument("-strict-safety", dest="strict_safety", action="store_true")
+    parser.add_argument("--release", action="store_true", help="accepted for compatibility")
+    if command == "run":
+        if "--" in rest:
+            index = rest.index("--")
+            program_args = rest[index + 1 :]
+            rest = rest[:index]
+        else:
+            program_args = []
+    else:
+        program_args = []
+    args = parser.parse_args(rest)
+
+    if args.sanitize:
+        os.environ["CXXFLAGS"] = (
+            os.environ.get("CXXFLAGS", "")
+            + " -fsanitize=address,undefined -fno-sanitize-recover=all -g"
+        ).strip()
+    manifest = project.find_manifest()
+    if manifest is None:
+        print(
+            "epitaxy: error: no Epitaxy.toml found in this directory or its parents",
+            file=sys.stderr,
+        )
+        return 2
+    root = manifest.parent
+    try:
+        if command == "build":
+            output = project.build_project(root, args.cc, args.quiet, args.keep)
+            if not args.quiet:
+                print(f"epitaxy: built {output}", file=sys.stderr)
+            return 0
+        if command == "run":
+            return project.run_project(
+                root, args.cc, args.quiet, args.keep, program_args
+            )
+        if command == "test":
+            return project.test_project(root, args.cc, args.quiet, args.keep)
+        if command == "check":
+            return project.check_project(root)
+    except project.ProjectError as exc:
+        print(f"epitaxy: error: {exc}", file=sys.stderr)
+        return 1
+    except CompileError as exc:
+        print(exc.render(), file=sys.stderr)
+        return 1
+    return 2
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="epitaxy",
         description="Compile Epitaxy (.ep) source files to C++20.",
         epilog=(
             "Epitaxy is MIT licensed.  It follows the Cpp2 syntax requirements "
-            "and contains no code from cppfront."
+            "and contains no code from cppfront.  Project commands: "
+            "epitaxy new <name> | build | run | test | check."
         ),
     )
     parser.add_argument("files", nargs="+", metavar="FILE.ep", help="Epitaxy source file(s)")
@@ -151,8 +241,13 @@ def transpile_file(path: Path, options: Options) -> str:
     return transpile(source, str(path), options)
 
 
+PROJECT_COMMANDS = ("new", "build", "run", "test", "check")
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     raw = list(sys.argv[1:]) if argv is None else list(argv)
+    if raw and raw[0] in PROJECT_COMMANDS:
+        return _project_command(raw)
     program_args: list[str] = []
     if "--" in raw:
         index = raw.index("--")

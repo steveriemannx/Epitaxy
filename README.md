@@ -406,6 +406,43 @@ you use); and the generated code includes the compiler runtime headers in the
 global module fragment, so the same include-before-import ordering is used.
 Single-file compilation is unaffected.
 
+## Projects (Cargo-like)
+
+A project is a directory with an `Epitaxy.toml` manifest and a `src/` tree
+(`src/main.ep` is the entry point, other `.ep` files are modules). `tests/*.ep`
+files are test programs; each one is built and must exit 0.
+
+```console
+$ python3 -m epitaxy new myapp
+$ cd myapp
+$ python3 -m epitaxy run
+Hello from myapp!
+$ python3 -m epitaxy build          # -> target/myapp
+$ python3 -m epitaxy test           # builds and runs tests/*.ep
+$ python3 -m epitaxy check          # parse/lower every source file
+```
+
+Minimal manifest:
+
+```toml
+[package]
+name = "myapp"
+version = "0.1.0"
+
+[dependencies]
+util = "../util"                 # path dependency (shorthand)
+util = { path = "../util" }      # or an inline table
+```
+
+Project builds use the C++20 modules pipeline, so they need a module-capable
+compiler (GCC or upstream Clang); `--cc` selects one explicitly. A dependency's
+`src/` modules are compiled together with the root project's modules and share
+one flat module namespace for now (import the declared module names). Build
+outputs go to `target/`. This is the first Cargo-like step: manifests, the
+`src/`/`tests/` layout, path dependencies, and build/run/test/check commands —
+workspace members, a package registry, lockfiles and `--lib` targets are future
+work.
+
 ## Interop model
 
 Epitaxy is a **new language**, not a "C++ syntax mode", so **implicit

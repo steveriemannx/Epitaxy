@@ -50,6 +50,7 @@ CASES_DIR = ROOT / "tests" / "cases"
 ERRORS_DIR = ROOT / "tests" / "errors"
 EXAMPLES_DIR = ROOT / "examples"
 MODULES_DIR = ROOT / "tests" / "modules"
+PROJECTS_DIR = ROOT / "tests" / "projects"
 SUPPORT_DIR = ROOT / "epitaxy" / "support"
 
 CXX_FLAGS = ["-std=c++20", "-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-unused-label"]
@@ -300,6 +301,63 @@ def run_module_case(cxx: str, keep: bool, verbose: bool) -> tuple[bool, str]:
     return True, ""
 
 
+def _project_env() -> dict:
+    env = os.environ.copy()
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(ROOT) + (os.pathsep + existing if existing else "")
+    return env
+
+
+def run_project_case(cxx: str, keep: bool, verbose: bool) -> tuple[bool, str]:
+    fixture = PROJECTS_DIR / "hello"
+    expected_run = (PROJECTS_DIR / "expected_run.txt").read_text(encoding="utf-8")
+    expected_test = (PROJECTS_DIR / "expected_test.txt").read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="epitaxy-project-") as tmp:
+        workdir = Path(tmp) / "hello"
+        shutil.copytree(fixture, workdir)
+        env = _project_env()
+
+        def run(*command: str, cwd: Path = workdir, timeout: int = 180):
+            return subprocess.run(
+                [sys.executable, "-m", "epitaxy", *command],
+                cwd=str(cwd),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+
+        result = run("run", "--cc", cxx, "-q")
+        if result.returncode != 0:
+            return False, "project run failed:\n" + result.stderr
+        if result.stdout != expected_run:
+            return False, (
+                f"project run output mismatch\nexpected: {expected_run!r}\n"
+                f"actual: {result.stdout!r}"
+            )
+        result = run("test", "--cc", cxx, "-q")
+        if result.returncode != 0:
+            return False, "project test failed:\n" + result.stderr
+        if expected_test.strip() not in result.stdout:
+            return False, (
+                f"project test output mismatch\nexpected to contain: "
+                f"{expected_test!r}\nactual: {result.stdout!r}"
+            )
+        # `epitaxy new` + `epitaxy run` on a freshly created project.
+        result = run("new", "demo", cwd=Path(tmp))
+        if result.returncode != 0:
+            return False, "epitaxy new failed:\n" + result.stderr
+        demo = Path(tmp) / "demo"
+        result = run("run", "--cc", cxx, "-q", cwd=demo)
+        if result.returncode != 0:
+            return False, "new project run failed:\n" + result.stderr
+        if "Hello from demo!" not in result.stdout:
+            return False, f"new project output mismatch: {result.stdout!r}"
+        if verbose:
+            print(f"    project output: {result.stdout}", file=sys.stderr)
+        return True, ""
+
+
 def run_example(path: Path, cxx: str, keep: bool, verbose: bool) -> tuple[bool, str]:
     try:
         cpp = transpile(path, Options())
@@ -366,6 +424,11 @@ def main(argv: list[str] | None = None) -> int:
                 total += 1
                 ok, details = run_module_case(module_cxx, args.keep, args.verbose)
                 _report("module", f"cpp-modules/{kind}", ok, details, args.verbose)
+            total += 1
+            ok, details = run_project_case(
+                module_compilers[0][1], args.keep, args.verbose
+            )
+            _report("project", "cargo-like", ok, details, args.verbose)
 
     print()
     if failures:

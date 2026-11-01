@@ -130,8 +130,10 @@ The short list is:
   `cpp1 { ... }` blocks are passed through; C++ declarations/statements cannot be
   freely interleaved.
 * **Modules / multi-file builds**: a C++20 modules prototype (`--cpp-modules`)
-  for GCC and upstream Clang exists; no export lists, partitions,
-  implementation units, `import std;` or general project builds.
+  and a Cargo-like project model (`Epitaxy.toml`, `src/`, `tests/`,
+  `epitaxy new/build/run/test/check`, path dependencies) exist; no export
+  lists, partitions, implementation units, `import std;`, workspace members,
+  registry or lockfiles.
 * **Full `is`/`as`**: no template-name, concept or value-predicate queries; no
   `std::expected` or user customization.
 * **`out` parameter construction semantics**: plain references, no guaranteed
@@ -457,6 +459,10 @@ In 0.5.0: **strict safety mode** (`-strict-safety`) with mandatory checks,
 checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
+
+In 0.12.0: Cargo-like project model: `Epitaxy.toml` ([package],
+[dependencies] path deps), `src/` modules, `tests/*.ep`, `epitaxy
+new/build/run/test/check`, `target/` outputs; builds use the module pipeline.
 
 In 0.11.0: the C++20 modules prototype supports upstream Clang in addition to
 GCC; the driver probes each candidate compiler for module support and uses
