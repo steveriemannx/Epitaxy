@@ -10,3 +10,7 @@ examples/_build/
 *.o
 *.out
 a.out
+
+# local-only (not part of the repository)
+/projects/
+/vscode-epitaxy/
