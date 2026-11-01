@@ -12,5 +12,5 @@ examples/_build/
 a.out
 
 # local-only (not part of the repository)
-/projects/
+/projects-main/
 /vscode-epitaxy/
