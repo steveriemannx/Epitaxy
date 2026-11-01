@@ -58,9 +58,12 @@ includes, then `export module epi_<name>;`, the `import epi_<dep>;` lines and an
 generated as an ordinary translation unit with the `import epi_<dep>;` lines
 after the includes. The CLI build driver parses each input to collect module
 names/imports, checks for duplicate names, cycles, missing modules and `main`
-in module files, topologically orders the modules, compiles each with GCC's
-`-fmodules-ts` (the BMI cache lives in the build directory), then compiles and
-links the entry file.
+in module files, topologically orders the modules, compiles each with the detected toolchain's module pipeline (GCC:
+`-fmodules-ts`, BMI cache in the build directory; upstream Clang: precompile
+the interface with `-x c++-module --precompile` to a `.pcm`, then compile the
+`.pcm` to an object with `-fmodule-file=` for its imports), then compiles and
+links the entry file. Compiler support is detected by compiling a tiny probe
+module with both pipelines.
 
 The generated file starts with the user's preprocessor lines, then (unless
 `-no-prelude`) a curated C++ standard-library prelude, then `epi_support.hpp` and

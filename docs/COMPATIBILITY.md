@@ -129,9 +129,9 @@ The short list is:
 * **Implicit mixed Cpp1/Cpp2 source**: only preprocessor lines and explicit
   `cpp1 { ... }` blocks are passed through; C++ declarations/statements cannot be
   freely interleaved.
-* **Modules / multi-file builds**: a GCC-only C++20 modules prototype
-  (`--cpp-modules`) exists; no export lists, partitions, implementation units,
-  `import std;` or general project builds.
+* **Modules / multi-file builds**: a C++20 modules prototype (`--cpp-modules`)
+  for GCC and upstream Clang exists; no export lists, partitions,
+  implementation units, `import std;` or general project builds.
 * **Full `is`/`as`**: no template-name, concept or value-predicate queries; no
   `std::expected` or user customization.
 * **`out` parameter construction semantics**: plain references, no guaranteed
@@ -457,6 +457,11 @@ In 0.5.0: **strict safety mode** (`-strict-safety`) with mandatory checks,
 checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
+
+In 0.11.0: the C++20 modules prototype supports upstream Clang in addition to
+GCC; the driver probes each candidate compiler for module support and uses
+Clang's two-step precompile + `-fmodule-file=` pipeline (Apple Clang lacks
+C++20 modules and gets a clear error).
 
 In 0.10.0: a prototype C++20 modules build (`--cpp-modules`) maps
 `module name;`/`import name;` to `export module epi_<name>;`/

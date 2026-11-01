@@ -211,27 +211,66 @@ def run_error_case(path: Path, cxx: str, keep: bool, verbose: bool) -> tuple[boo
             print(f"    kept: {workdir}", file=sys.stderr)
 
 
-def find_modules_cxx() -> str | None:
+def _probe_module_compiler(cxx: str) -> str | None:
+    workdir = Path(tempfile.mkdtemp(prefix="epitaxy-module-probe-"))
+    try:
+        source = workdir / "probe.cppm"
+        source.write_text(
+            "export module epi_probe;\nexport int epi_probe_fn() { return 0; }\n",
+            encoding="utf-8",
+        )
+        pcm = workdir / "probe.pcm"
+        clang = subprocess.run(
+            [cxx, "-std=c++20", "-x", "c++-module", "--precompile",
+             str(source), "-o", str(pcm)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if clang.returncode == 0 and pcm.exists():
+            return "clang"
+        obj = workdir / "probe.o"
+        gcc = subprocess.run(
+            [cxx, "-std=c++20", "-fmodules-ts", "-x", "c++", "-c",
+             str(source), "-o", str(obj)],
+            capture_output=True, text=True, timeout=60, cwd=str(workdir),
+        )
+        if gcc.returncode == 0 and obj.exists():
+            return "gcc"
+        return None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def find_modules_compilers() -> list[tuple[str, str]]:
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
     for candidate in (
         os.environ.get("EPITAXY_MODULES_CXX"),
         "g++-16",
         "g++",
+        "/opt/homebrew/opt/llvm/bin/clang++",
+        "/usr/local/opt/llvm/bin/clang++",
+        "clang++",
     ):
-        if candidate and shutil.which(candidate):
-            try:
-                out = subprocess.run(
-                    [candidate, "--version"], capture_output=True, text=True, timeout=20
-                )
-            except Exception:
-                continue
-            if "GCC" in (out.stdout or "") + (out.stderr or ""):
-                return candidate
-    return None
+        if not candidate:
+            continue
+        resolved = shutil.which(candidate) or candidate
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if not (Path(resolved).exists() or shutil.which(resolved)):
+            continue
+        kind = _probe_module_compiler(resolved)
+        if kind is not None:
+            found.append((kind, resolved))
+    return found
 
 
 def run_module_case(cxx: str, keep: bool, verbose: bool) -> tuple[bool, str]:
     entry = MODULES_DIR / "main.ep"
     math = MODULES_DIR / "math.ep"
+    shapes = MODULES_DIR / "shapes.ep"
     expected = (MODULES_DIR / "expected.txt").read_text(encoding="utf-8")
     command = [
         sys.executable,
@@ -244,6 +283,7 @@ def run_module_case(cxx: str, keep: bool, verbose: bool) -> tuple[bool, str]:
         "-q",
         str(entry),
         str(math),
+        str(shapes),
     ]
     try:
         result = subprocess.run(
@@ -318,13 +358,14 @@ def main(argv: list[str] | None = None) -> int:
             _report("example", path.name, ok, details, args.verbose)
 
     if not args.filter:
-        modules_cxx = find_modules_cxx()
-        if modules_cxx is None:
-            print(f"{YELLOW}SKIP{RESET} module  C++20 modules (no GCC compiler found)")
+        module_compilers = find_modules_compilers()
+        if not module_compilers:
+            print(f"{YELLOW}SKIP{RESET} module  C++20 modules (no module-capable compiler found)")
         else:
-            total += 1
-            ok, details = run_module_case(modules_cxx, args.keep, args.verbose)
-            _report("module", "cpp-modules", ok, details, args.verbose)
+            for kind, module_cxx in module_compilers:
+                total += 1
+                ok, details = run_module_case(module_cxx, args.keep, args.verbose)
+                _report("module", f"cpp-modules/{kind}", ok, details, args.verbose)
 
     print()
     if failures:

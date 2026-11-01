@@ -1,0 +1,9 @@
+module shapes;
+
+import math;
+
+box: namespace = {
+    make: (a: i32, b: i32) -> geo::point = {
+        return geo::make_point(a, b);
+    }
+}

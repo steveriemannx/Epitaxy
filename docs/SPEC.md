@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.10 (draft)**
+**Version 0.11 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -166,9 +166,10 @@ module declaration is the entry translation unit and is the only file that may
 define `main`. Without `--cpp-modules` these declarations are compile-time
 errors.
 
-Prototype restrictions: GCC only, single-identifier module names, no module
-partitions, export lists, implementation units or `import std;`, and imports are
-not transitive.
+Prototype restrictions: module-capable compilers only (GCC with
+`-fmodules-ts`, or upstream Clang; Apple Clang does not implement C++20
+modules), single-identifier module names, no module partitions, export lists,
+implementation units or `import std;`, and imports are not transitive.
 
 ## 3. Declarations
 

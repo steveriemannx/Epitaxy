@@ -121,7 +121,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="prototype C++20 modules build: every input with 'module name;' is "
         "compiled as a C++ module, the single input without it is the entry "
-        "point (currently requires GCC)",
+        "point (requires GCC or upstream Clang; Apple Clang lacks C++20 "
+        "modules)",
     )
     parser.add_argument(
         "--safe-only",
@@ -249,26 +250,75 @@ def _output_path(source: Path, output: Optional[str]) -> Path:
     return source.with_suffix(".cpp")
 
 
-def _modules_cxx(args):
-    cxx = args.cc or find_cxx()
+def _probe_module_toolchain(cxx: str):
+    """Return 'gcc', 'clang' or None for a compiler's C++20 module support."""
+    workdir = Path(tempfile.mkdtemp(prefix="epitaxy-module-probe-"))
     try:
-        version = subprocess.run(
-            [cxx, "--version"], capture_output=True, text=True, timeout=20
+        source = workdir / "probe.cppm"
+        source.write_text(
+            "export module epi_probe;\n"
+            "export int epi_probe_fn() { return 0; }\n",
+            encoding="utf-8",
         )
-    except Exception:
-        version = None
-    text = ""
-    if version is not None:
-        text = (version.stdout or "") + (version.stderr or "")
-    if "Free Software Foundation" in text or "GCC" in text or "g++" in text:
-        return cxx
+        pcm = workdir / "probe.pcm"
+        clang = subprocess.run(
+            [cxx, "-std=c++20", "-x", "c++-module", "--precompile",
+             str(source), "-o", str(pcm)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if clang.returncode == 0 and pcm.exists():
+            return "clang"
+        obj = workdir / "probe.o"
+        gcc = subprocess.run(
+            [cxx, "-std=c++20", "-fmodules-ts", "-x", "c++", "-c",
+             str(source), "-o", str(obj)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=str(workdir),
+        )
+        if gcc.returncode == 0 and obj.exists():
+            return "gcc"
+        return None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _module_toolchain(args):
+    if args.cc:
+        candidates = [args.cc]
+    else:
+        candidates = []
+        for candidate in (
+            os.environ.get("CXX"),
+            "g++-16",
+            "g++",
+            "/opt/homebrew/opt/llvm/bin/clang++",
+            "/usr/local/opt/llvm/bin/clang++",
+            "clang++",
+        ):
+            if not candidate:
+                continue
+            resolved = shutil.which(candidate) or candidate
+            if resolved and resolved not in candidates:
+                candidates.append(resolved)
+    for cxx in candidates:
+        if not (Path(cxx).exists() or shutil.which(cxx)):
+            continue
+        kind = _probe_module_toolchain(cxx)
+        if kind is not None:
+            return cxx, kind
     print(
-        "epitaxy: error: the C++20 modules prototype currently requires GCC "
-        f"(g++); {cxx!r} does not provide the required module support. "
-        "Pass e.g. --cc g++-16.",
+        "epitaxy: error: no C++20 module support found. Pass --cc with a "
+        "compiler that supports modules (GCC with -fmodules-ts, or upstream "
+        "Clang). Apple Clang does not support C++20 modules.",
         file=sys.stderr,
     )
-    return None
+    return None, None
 
 
 def _module_options(args) -> Options:
@@ -289,7 +339,7 @@ def _build_cpp_modules(args, program_args: Optional[list[str]] = None) -> int:
     from .diag import CompileError
     from .parser import parse
 
-    cxx = _modules_cxx(args)
+    cxx, toolchain = _module_toolchain(args)
     if cxx is None:
         return 2
     files = [Path(f) for f in args.files]
@@ -410,10 +460,10 @@ def _build_cpp_modules(args, program_args: Optional[list[str]] = None) -> int:
             return 1
 
     workdir = Path(tempfile.mkdtemp(prefix="epitaxy-modules-"))
+    cxxflags = shlex.split(os.environ.get("CXXFLAGS", ""))
     base_flags = [
-        *shlex.split(os.environ.get("CXXFLAGS", "")),
+        *cxxflags,
         "-std=c++20",
-        "-fmodules-ts",
         "-Wall",
         "-Wextra",
         "-Wno-unused-parameter",
@@ -421,6 +471,9 @@ def _build_cpp_modules(args, program_args: Optional[list[str]] = None) -> int:
         "-I",
         str(SUPPORT_DIR),
     ]
+    module_flags = ["-fmodules-ts"] if toolchain == "gcc" else []
+    if toolchain == "clang":
+        module_flags = ["-Wno-unused-command-line-argument"]
 
     def run(cmd: list[str]) -> bool:
         if not args.quiet:
@@ -430,6 +483,7 @@ def _build_cpp_modules(args, program_args: Optional[list[str]] = None) -> int:
 
     try:
         objects: list[str] = []
+        pcm_paths: dict[str, Path] = {}
         for name in order:
             path, imports, _tu = module_files[name]
             options = _module_options(args)
@@ -439,9 +493,28 @@ def _build_cpp_modules(args, program_args: Optional[list[str]] = None) -> int:
             cppm = workdir / f"{name}.cppm"
             cppm.write_text(cpp, encoding="utf-8")
             obj = workdir / f"{name}.o"
-            command = [
-                cxx, *base_flags, "-x", "c++", "-c", str(cppm), "-o", str(obj)
-            ]
+            if toolchain == "clang":
+                pcm_flags = [
+                    f"-fmodule-file=epi_{dep}={pcm_paths[dep]}" for dep in imports
+                ]
+                pcm = workdir / f"{name}.pcm"
+                precompile = [
+                    cxx, *base_flags, "-x", "c++-module", "--precompile",
+                    str(cppm), "-o", str(pcm), *pcm_flags,
+                ]
+                if not run(precompile):
+                    print(
+                        f"epitaxy: error: precompiling module '{name}' failed",
+                        file=sys.stderr,
+                    )
+                    return 1
+                pcm_paths[name] = pcm
+                command = [cxx, *base_flags, "-c", str(pcm), "-o", str(obj), *pcm_flags]
+            else:
+                command = [
+                    cxx, *base_flags, *module_flags, "-x", "c++", "-c",
+                    str(cppm), "-o", str(obj),
+                ]
             if not run(command):
                 print(
                     f"epitaxy: error: compiling module '{name}' failed",
@@ -458,15 +531,27 @@ def _build_cpp_modules(args, program_args: Optional[list[str]] = None) -> int:
         entry_cpp = workdir / "main.cpp"
         entry_cpp.write_text(cpp, encoding="utf-8")
         entry_obj = workdir / "main.o"
-        command = [cxx, *base_flags, "-c", str(entry_cpp), "-o", str(entry_obj)]
+        if toolchain == "clang":
+            entry_pcm_flags = [
+                f"-fmodule-file=epi_{dep}={pcm_paths[dep]}" for dep in entry_imports
+            ]
+            command = [
+                cxx, *base_flags, "-c", str(entry_cpp), "-o", str(entry_obj),
+                *entry_pcm_flags,
+            ]
+        else:
+            command = [
+                cxx, *base_flags, *module_flags, "-c", str(entry_cpp),
+                "-o", str(entry_obj),
+            ]
         if not run(command):
             print("epitaxy: error: compiling the entry file failed", file=sys.stderr)
             return 1
 
         exe = workdir / "program"
         command = [
-            cxx, *shlex.split(os.environ.get("CXXFLAGS", "")), "-std=c++20",
-            "-fmodules-ts", str(entry_obj), *objects, "-o", str(exe),
+            cxx, *cxxflags, "-std=c++20", *module_flags,
+            str(entry_obj), *objects, "-o", str(exe),
         ]
         if not run(command):
             print("epitaxy: error: linking the module program failed", file=sys.stderr)

@@ -1,6 +1,8 @@
 import math;
+import shapes;
 
 main: () = {
-    p := geo::make_point(4, 5);
+    p := box::make(4, 5);
     epi::println("sum=", p.sum());
+    epi::println("add=", geo::add(2, 3));
 }

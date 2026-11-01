@@ -256,7 +256,7 @@ usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
 | `-strict-safety` | strict safety mode: all checks mandatory, checked arithmetic, `cpp1` only inside `unsafe` |
 | `--sanitize` | compile with `-fsanitize=address,undefined` under `--run`/`-c` (detection layer for C++-side UB) |
 | `--safe-only` | restrict the program to Epitaxy + the compiler runtime: no preprocessor, `cpp1`, `unsafe`, raw pointers, external C++ names, thread API or by-reference captures; implies `-strict-safety` |
-| `--cpp-modules` | prototype C++20 modules build: inputs with `module name;` become C++ modules, the single input without it is the entry point (currently requires GCC) |
+| `--cpp-modules` | prototype C++20 modules build: inputs with `module name;` become C++ modules, the single input without it is the entry point (GCC or upstream Clang; Apple Clang lacks C++20 modules) |
 | `--version` | print the compiler version |
 
 Environment variables: `CXX` selects the C++ compiler and `CXXFLAGS` adds extra
@@ -392,13 +392,19 @@ exported), generates the entry file as an ordinary translation unit with
 `import epi_<name>;` lines, compiles the modules in dependency order and links
 the executable.
 
-Prototype limitations: GCC only (Apple Clang has no C++20 module support in the
-current environment; GCC uses `-fmodules-ts` and its `gcm.cache`); module names
-are single identifiers; there are no module partitions, export lists,
-implementation units or `import std;`; every top-level name of a module is
-exported; the entry file is the only file allowed to define `main`; and imports
-are not transitive (import every module whose names you use). Single-file
-compilation is unaffected.
+The build driver probes the compiler for C++20 module support and handles
+GCC (`-fmodules-ts` with its `gcm.cache`) and upstream Clang
+(`-x c++-module --precompile`, then `-fmodule-file=`). Apple Clang does not
+implement C++20 modules; with it you get a clear error and can pass e.g.
+`--cc /opt/homebrew/opt/llvm/bin/clang++` or `--cc g++-16`.
+
+Prototype limitations: module names are single identifiers; there are no
+module partitions, export lists, implementation units or `import std;`; every
+top-level name of a module is exported; the entry file is the only file allowed
+to define `main`; imports are not transitive (import every module whose names
+you use); and the generated code includes the compiler runtime headers in the
+global module fragment, so the same include-before-import ordering is used.
+Single-file compilation is unaffected.
 
 ## Interop model
 

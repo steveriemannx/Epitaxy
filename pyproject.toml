@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "epitaxy"
-version = "0.10.0"
+version = "0.11.0"
 description = "Epitaxy: a from-scratch Cpp2-syntax language with ownership/borrow checking that compiles to C++20"
 readme = "README.md"
 requires-python = ">=3.10"
