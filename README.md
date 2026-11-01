@@ -255,6 +255,7 @@ usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
 | `-no-prelude` | do not pre-include the curated C++ standard-library headers |
 | `-strict-safety` | strict safety mode: all checks mandatory, checked arithmetic, `cpp1` only inside `unsafe` |
 | `--sanitize` | compile with `-fsanitize=address,undefined` under `--run`/`-c` (detection layer for C++-side UB) |
+| `--safe-only` | restrict the program to Epitaxy + the compiler runtime: no preprocessor, `cpp1`, `unsafe`, raw pointers, external C++ names, thread API or by-reference captures; implies `-strict-safety` |
 | `--version` | print the compiler version |
 
 Environment variables: `CXX` selects the C++ compiler and `CXXFLAGS` adds extra
@@ -338,6 +339,23 @@ conservative (no lifetime generics), safe C++ interop is trusted, and
 arbitrary C++ threading. An
 unconditional "safe code has no UB" guarantee would require an owned
 backend/runtime — see [`docs/SAFETY.md`](docs/SAFETY.md) §8.
+
+### Safe-only mode
+
+`--safe-only` removes the user-facing C++ escape hatches: no preprocessor
+directives, no `cpp1` blocks, no `unsafe`, no raw pointers, no external C++
+types/names, no `unchecked_*`, no thread API and no by-reference captures. Only
+Epitaxy declarations, builtin scalars, user types, `unique`/`shared`, borrows
+and the trusted compiler runtime (`std::string`, interpolation,
+`epi::print`/`epi::println`, contracts, bounds/null/overflow helpers) are
+allowed. The mode implies `-strict-safety`.
+
+Safe-only makes the **conditional** guarantee precise: no user-written C++
+interop is a trust boundary any more. It is still not an unconditional "safe
+code has no UB" promise: the compiler runtime itself (standard library calls
+inside `std::string`/format/I/O), recursion/stack exhaustion and resource
+exhaustion remain outside the guarantee — see
+[`docs/SAFETY.md`](docs/SAFETY.md).
 
 ## Interop model
 

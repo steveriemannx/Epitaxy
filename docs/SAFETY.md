@@ -5,7 +5,7 @@ because "safe" is meaningless without a threat model, and because Epitaxy is
 often compared to Rust — a comparison that only makes sense if the exact
 guarantee boundary is written down.
 
-**Epitaxy 0.8 is not Rust-certified.** It implements a Rust-style ownership and
+**Epitaxy 0.9 is not Rust-certified.** It implements a Rust-style ownership and
 borrow checker and a default-on checked runtime, but it compiles to C++20 and
 lets you call arbitrary C++ code. A Rust-style *unconditional* guarantee — "no
 undefined behaviour in safe code" — requires an execution model Epitaxy does not
@@ -18,6 +18,7 @@ have yet (see [the path to an unconditional guarantee](#the-path-to-an-unconditi
 | Level | How to enable | What you get |
 | --- | --- | --- |
 | **Default** | (default) | Ownership/borrow checking, bounds/null/div-zero/sign checks, `unsafe` boundary for raw pointers. Individual checks can be disabled with `-no-*` flags. **Best effort, not a guarantee.** |
+| **Safe-only** | `-safe-only` / `--safe-only` | Strict mode plus: no preprocessor, `cpp1`, `unsafe`, raw pointers, external C++ types/names, `unchecked_*`, thread API or by-reference captures. Only Epitaxy + the trusted compiler runtime. |
 | **Strict** | `-strict-safety` | All checks forced on (disabling flags are rejected), checked integer arithmetic, `cpp1` blocks require `unsafe`. This is the level the **conditional guarantee** applies to. |
 | *(future)* **Certified** | own backend/runtime | Rust-equivalent guarantee in safe code. Not implemented. |
 
@@ -135,7 +136,7 @@ Rules for keeping `unsafe` sound (documented, not machine-checked):
 These are the gaps relative to Rust. They are the reason this document says
 "conditional guarantee" rather than "memory safe" or "Rust-level".
 
-| Rust guarantee | Epitaxy 0.8 |
+| Rust guarantee | Epitaxy 0.9 |
 | --- | --- |
 | no UB in safe code | conditional: excluded C++/unsafe/`unchecked_*` surface only |
 | no data races | **checked only for `epi::spawn`**: arguments and captured values must be `Send`, `shared<T>` requires `Send + Sync`. Direct `std::thread`/`std::async` and C++ library threading are not tracked. |
@@ -167,7 +168,7 @@ execution model (see §8).
 
 ## 6. Comparison to Rust in one table
 
-| Mechanism | Rust | Epitaxy 0.8 |
+| Mechanism | Rust | Epitaxy 0.9 |
 | --- | --- | --- |
 | ownership + move | yes | yes (for Epitaxy code; conservative automatic last-use move) |
 | borrow checking | NLL, lifetimes, generics | NLL for non-escaping borrows, conservative otherwise; explicit borrow sources; no lifetime generics |

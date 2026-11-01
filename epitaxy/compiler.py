@@ -8,12 +8,16 @@ from __future__ import annotations
 from .codegen import CodeGen, Options
 from .ownership import analyze
 from .parser import parse
+from .safeonly import validate as validate_safe_only
 
 
 def transpile(source: str, filename: str = "<input>", options: Options | None = None) -> str:
     """Parse, ownership-check and lower an Epitaxy translation unit."""
 
     options = options or Options()
+    if options.safe_only:
+        # Safe-only implies the strict checked subset.
+        options.strict_safety = True
     if options.strict_safety:
         # Strict mode is not negotiable: all checks stay on.
         options.subscript_checks = True
@@ -22,6 +26,8 @@ def transpile(source: str, filename: str = "<input>", options: Options | None = 
         options.sign_checks = True
         options.ownership_checks = True
     tu = parse(source, filename)
+    if options.safe_only:
+        validate_safe_only(tu, filename)
     info = analyze(
         tu,
         filename,

@@ -1,0 +1,9 @@
+make: () -> _ = {
+    x := 1;
+    return :() -> i32 = { return x&$*; };
+}
+
+main: () = {
+    f := make();
+    epi::println("f()=", f());
+}

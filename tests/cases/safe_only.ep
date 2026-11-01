@@ -1,0 +1,23 @@
+box: type = {
+    public value: i32 = 0;
+
+    double_it: (inout this) = {
+        value *= 2;
+    }
+}
+
+make_adder: (n: i32) -> _ = {
+    return :(v: i32) -> i32 = { return v + n$; };
+}
+
+main: () = {
+    b: box = ();
+    b.value = 21;
+    b.double_it();
+
+    add := make_adder(5);
+    result := add(37);
+
+    epi::println("b=", b.value);
+    epi::println("result=", result);
+}

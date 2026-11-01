@@ -81,6 +81,14 @@ def options_from_flags(flags: list[str]) -> Options:
             opts.ownership_checks = False
         elif flag == "-no-prelude":
             opts.preload_std = False
+        elif flag == "--safe-only":
+            opts.safe_only = True
+            opts.strict_safety = True
+            opts.subscript_checks = True
+            opts.null_checks = True
+            opts.div_checks = True
+            opts.sign_checks = True
+            opts.ownership_checks = True
         elif flag == "-strict-safety":
             opts.strict_safety = True
             opts.subscript_checks = True

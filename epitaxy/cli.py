@@ -116,6 +116,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="compile with -fsanitize=address,undefined when using --run/-c",
     )
     parser.add_argument(
+        "--safe-only",
+        dest="safe_only",
+        action="store_true",
+        help="restrict the program to Epitaxy and the compiler runtime: no "
+        "preprocessor, cpp1, unsafe, raw pointers, external C++ names or "
+        "thread API; implies -strict-safety",
+    )
+    parser.add_argument(
         "-strict-safety",
         dest="strict_safety",
         action="store_true",
@@ -141,7 +149,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         index = raw.index("--")
         raw, program_args = raw[:index], raw[index + 1 :]
     args = build_arg_parser().parse_args(raw)
-    if args.strict_safety and not all(
+    if (args.strict_safety or args.safe_only) and not all(
         [
             args.subscript_checks,
             args.null_checks,
@@ -151,7 +159,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         ]
     ):
         print(
-            "epitaxy: error: -strict-safety cannot be combined with -no-* checks",
+            "epitaxy: error: strict/safe-only mode cannot be combined with -no-* checks",
             file=sys.stderr,
         )
         return 2
@@ -163,7 +171,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         sign_checks=args.sign_checks,
         ownership_checks=args.ownership_checks,
         preload_std=args.preload_std,
-        strict_safety=args.strict_safety,
+        strict_safety=args.strict_safety or args.safe_only,
+        safe_only=args.safe_only,
     )
 
     files = [Path(f) for f in args.files]

@@ -456,6 +456,11 @@ checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
 
+In 0.9.0: `--safe-only` mode rejects all user-written C++ interop before
+ownership checking (preprocessor, `cpp1`, `unsafe`, raw pointers, external C++
+types/names, `unchecked_*`, thread API, by-reference captures), leaving only
+Epitaxy + the trusted compiler runtime; it implies strict safety.
+
 In 0.8.0: declarations without initializers are value-initialized (`T x{}`),
 runtime safety checks that guard UB (bounds, null, division/remainder by zero,
 `INT_MIN / -1`, overflow, shifts) abort after reporting, and `--sanitize` /

@@ -356,6 +356,36 @@ class OwnershipTests(unittest.TestCase):
         self.assertIn("never continue into a null dereference", header)
         self.assertIn("never continue into an out-of-bounds access", header)
 
+    def test_safe_only_accepts_pure_epitaxy(self):
+        source = (
+            "box: type = { public value: i32 = 0; }\n"
+            "main: () = { b: box = (); b.value = 21; epi::println(\"b=\", b.value); }"
+        )
+        cpp = transpile(source, "t.ep", Options(safe_only=True))
+        self.assertIn("epi::println", cpp)
+
+    def test_safe_only_rejects_cpp_interop(self):
+        for source, needle in [
+            ("#include <vector>\nmain: () = { }", "preprocessor"),
+            ("main: () = { v: std::vector<i32> = (); }", "external C++ type"),
+            ("main: () = { std::cout << \"x\"; }", "external C++ name"),
+            ("main: () = { x := 1; p: *i32 = unsafe(x&); }", "raw pointer"),
+            ("main: () = { cpp1 { int x; } }", "cpp1"),
+        ]:
+            with self.assertRaises(CompileError) as ctx:
+                transpile(source, "t.ep", Options(safe_only=True))
+            self.assertIn(needle, ctx.exception.message)
+
+    def test_safe_only_rejects_reference_capture(self):
+        with self.assertRaises(CompileError) as ctx:
+            transpile(
+                "make: () -> _ = { x := 1; return :() -> i32 = { return x&$*; }; }\n"
+                "main: () = { }",
+                "t.ep",
+                Options(safe_only=True),
+            )
+        self.assertIn("by-reference captures", ctx.exception.message)
+
     def test_thread_spawn_accepts_send_values(self):
         cpp = transpile(
             "work: (p: shared<i32>) = { }\n"

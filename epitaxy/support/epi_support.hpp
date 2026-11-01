@@ -931,6 +931,26 @@ thread spawn(F&& f, Args&&... args) {
         std::thread(std::forward<F>(f), std::forward<Args>(args)...));
 }
 
+// ---------------------------------------------------------------------------
+// Safe-only output helpers
+// ---------------------------------------------------------------------------
+//
+// In --safe-only mode the only I/O surface is the compiler runtime:
+// ``print(...)`` / ``println(...)`` stream their arguments to std::cout.
+// Everything else that is not Epitaxy source is rejected by the safe-only
+// validator.
+
+template <class... Args>
+void print(Args&&... args) {
+    (std::cout << ... << std::forward<Args>(args));
+}
+
+template <class... Args>
+void println(Args&&... args) {
+    print(std::forward<Args>(args)...);
+    std::cout << '\n';
+}
+
 }  // namespace epi
 
 // Prelude names are available unqualified in Epitaxy source.
@@ -958,6 +978,8 @@ using epi::unchecked_dereference;
 using epi::unchecked_mod;
 using epi::unchecked_narrow;
 using epi::unchecked_subscript;
+using epi::print;
+using epi::println;
 using epi::checked_add;
 using epi::checked_add_assign;
 using epi::checked_dec;

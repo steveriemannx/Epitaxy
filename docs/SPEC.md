@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.8 (draft)**
+**Version 0.9 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -1082,7 +1082,31 @@ behaviour through Epitaxy's own lowered operations. Calls into C++ are a trust
 boundary: the C++ standard library, third-party libraries and `unsafe` code are
 assumed to be correct.
 
-### 10.1 Threads and `Send`/`Sync`
+### 10.1 Safe-only mode
+
+`--safe-only` restricts a translation unit to the Epitaxy language and the
+compiler runtime. The compiler rejects, before ownership checking:
+
+* preprocessor directives (`#include`, `#define`, …);
+* `cpp1 { ... }` blocks;
+* `unsafe` functions, blocks and expressions, and raw pointer types;
+* external C++ type names (the only non-builtin, non-user type allowed is the
+  trusted runtime type `std::string`), external C++ names in expressions and
+  `unchecked_*` operations;
+* the thread API (`epi::spawn` and related C++ runtime names);
+* by-reference captures in function expressions (capture by value instead).
+
+Only Epitaxy declarations, builtin scalars, user-defined types and aliases,
+`unique`/`shared`, borrow types and the compiler runtime (`std::string`,
+string interpolation, `epi::print`/`epi::println`, contracts and the checked
+arithmetic/bounds/null helpers) are available. Safe-only implies
+`-strict-safety`; combining it with `-no-*` checks is an error.
+
+Safe-only removes user-written C++ interop as a trust boundary, but does not by
+itself provide an unconditional no-UB guarantee: calls inside the compiler
+runtime, recursion/stack exhaustion and resource exhaustion remain outside it.
+
+### 10.2 Threads and `Send`/`Sync`
 
 The checked threading API is `epi::thread` (an owned, movable, non-copyable
 thread handle from `<thread>`) and `epi::spawn(f, args...)`, which starts a

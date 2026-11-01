@@ -119,6 +119,7 @@ class Options:
     ownership_checks: bool = True
     preload_std: bool = True
     strict_safety: bool = False
+    safe_only: bool = False
 
 
 class FnCtx:
