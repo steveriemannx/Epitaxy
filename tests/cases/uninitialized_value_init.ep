@@ -1,0 +1,12 @@
+#include <iostream>
+
+record: type = {
+    public a: i32;
+    public b: i32;
+}
+
+main: () = {
+    x: i32;
+    r: record = ();
+    std::cout << "x=(x)$ a=(r.a)$ b=(r.b)$\n";
+}

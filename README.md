@@ -254,6 +254,7 @@ usage: epitaxy [-h] [-o FILE.cpp] [--emit-cpp] [--run] [-c] [--cc CXX]
 | `-no-*-checks` | disable a default-on safety check (`name`, `null`, `div-zero`, `comparison`, `ownership`) |
 | `-no-prelude` | do not pre-include the curated C++ standard-library headers |
 | `-strict-safety` | strict safety mode: all checks mandatory, checked arithmetic, `cpp1` only inside `unsafe` |
+| `--sanitize` | compile with `-fsanitize=address,undefined` under `--run`/`-c` (detection layer for C++-side UB) |
 | `--version` | print the compiler version |
 
 Environment variables: `CXX` selects the C++ compiler and `CXXFLAGS` adds extra
@@ -375,6 +376,9 @@ of `<algorithm>`, `<map>`, `<numeric>`, `<optional>`, `<variant>`, `<chrono>`,
   falls back to lexical scopes when a borrow may escape or is used across loop
   iterations; it has no lifetime generics beyond explicit `-> in(param) T`
   annotations and does not model C++ libraries.
+* Declarations without an initializer are value-initialized (`T x{}`), so they
+  cannot cause undefined behaviour; unlike Rust, Epitaxy does not reject reads
+  of such objects at compile time.
 * Data-race checking is limited to the explicit thread API: `epi::spawn`
   requires `Send` arguments/captures and `Send + Sync` for `shared<T>`. Raw
   `std::thread`/`std::async` and C++ library threading are outside the analysis.

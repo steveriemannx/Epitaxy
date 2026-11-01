@@ -341,6 +341,21 @@ class OwnershipTests(unittest.TestCase):
         cpp = self.compile("#include <vector>\nmain: () = { }")
         self.assertEqual(cpp.count("#include <vector>"), 1)
 
+    def test_uninitialized_declarations_are_value_initialized(self):
+        cpp = self.compile(
+            "box: type = { public a: i32; public b: i32; }\n"
+            "main: () = { x: i32; r: box = (); }"
+        )
+        self.assertIn("i32 a{};", cpp)
+        self.assertIn("i32 b{};", cpp)
+        self.assertIn("i32 x{};", cpp)
+
+    def test_safety_guards_abort_after_reporting(self):
+        header = (Path(__file__).resolve().parents[2] / "epitaxy/support/epi_support.hpp").read_text()
+        self.assertIn("integer division overflow", header)
+        self.assertIn("never continue into a null dereference", header)
+        self.assertIn("never continue into an out-of-bounds access", header)
+
     def test_thread_spawn_accepts_send_values(self):
         cpp = transpile(
             "work: (p: shared<i32>) = { }\n"

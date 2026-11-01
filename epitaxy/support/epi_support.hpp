@@ -33,6 +33,7 @@
 #include <format>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -268,6 +269,7 @@ constexpr decltype(auto) subscript(Container&& container, Index&& index) {
             auto const size = std::size(container);
             if (!detail::index_in_range(index, size)) {
                 bounds_safety.report_violation("subscript index is out of bounds");
+                std::abort();  // never continue into an out-of-bounds access
             }
         }
     }
@@ -285,6 +287,7 @@ constexpr decltype(auto) deref(Ptr&& pointer) {
     if constexpr (std::is_pointer_v<std::remove_cvref_t<Ptr>>) {
         if (pointer == nullptr) {
             null_safety.report_violation("null pointer dereference");
+            std::abort();  // never continue into a null dereference
         }
     }
     return *std::forward<Ptr>(pointer);
@@ -309,6 +312,13 @@ constexpr auto div(A&& a, B&& b) {
     if constexpr (std::is_integral_v<UA> && std::is_integral_v<UB>) {
         if (b == 0) {
             type_safety.report_violation("integer division by zero");
+            std::abort();
+        }
+        if constexpr (std::is_signed_v<UA> && std::is_signed_v<UB>) {
+            if (a == (std::numeric_limits<UA>::min)() && b == -1) {
+                type_safety.report_violation("integer division overflow");
+                std::abort();
+            }
         }
     }
     return std::forward<A>(a) / std::forward<B>(b);
@@ -321,6 +331,13 @@ constexpr auto mod(A&& a, B&& b) {
     if constexpr (std::is_integral_v<UA> && std::is_integral_v<UB>) {
         if (b == 0) {
             type_safety.report_violation("integer remainder by zero");
+            std::abort();
+        }
+        if constexpr (std::is_signed_v<UA> && std::is_signed_v<UB>) {
+            if (a == (std::numeric_limits<UA>::min)() && b == -1) {
+                type_safety.report_violation("integer remainder overflow");
+                std::abort();
+            }
         }
     }
     return std::forward<A>(a) % std::forward<B>(b);

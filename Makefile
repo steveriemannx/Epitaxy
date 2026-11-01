@@ -1,7 +1,7 @@
 PYTHON ?= python3
 CXX ?= clang++
 
-.PHONY: all test unit integration examples install clean check
+.PHONY: all test unit integration examples sanitize install clean check
 
 all: test
 
@@ -12,6 +12,11 @@ unit:
 
 integration:
 	CXX=$(CXX) $(PYTHON) tests/run_tests.py
+
+# Run the whole suite with ASan/UBSan (detection layer for C++-side UB).
+sanitize:
+	CXXFLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -g" \
+		CXX=$(CXX) $(PYTHON) tests/run_tests.py
 
 # Compile and run every example program.
 examples:

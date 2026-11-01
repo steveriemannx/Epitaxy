@@ -110,6 +110,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="do not pre-include the C++ standard-library headers",
     )
     parser.add_argument(
+        "--sanitize",
+        dest="sanitize",
+        action="store_true",
+        help="compile with -fsanitize=address,undefined when using --run/-c",
+    )
+    parser.add_argument(
         "-strict-safety",
         dest="strict_safety",
         action="store_true",
@@ -234,6 +240,14 @@ def _compile_and_run(cpp: str, source: Path, args, run: bool, program_args: Opti
         cxx,
         *shlex.split(os.environ.get("CXXFLAGS", "")),
         "-std=c++20",
+    ]
+    if getattr(args, "sanitize", False):
+        command += [
+            "-fsanitize=address,undefined",
+            "-fno-sanitize-recover=all",
+            "-g",
+        ]
+    command += [
         "-Wall",
         "-Wextra",
         "-Wno-unused-parameter",

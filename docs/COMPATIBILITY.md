@@ -456,6 +456,12 @@ checked integer arithmetic (`epi::checked_*`), and `cpp1` blocks confined to
 `unsafe`; the conditionally-guaranteed safe subset, its trust boundary and the
 non-guarantees are specified in [`SAFETY.md`](SAFETY.md).
 
+In 0.8.0: declarations without initializers are value-initialized (`T x{}`),
+runtime safety checks that guard UB (bounds, null, division/remainder by zero,
+`INT_MIN / -1`, overflow, shifts) abort after reporting, and `--sanitize` /
+`make sanitize` compile with ASan+UBSan. The remaining UB sources are the
+explicit trust boundary and called C++ code.
+
 In 0.7.0: the checked thread API `epi::thread`/`epi::spawn` with structural
 `Send`/`Sync` checking (arguments and captures must be `Send`; `shared<T>`
 requires `Send + Sync`; reference captures rejected; dropping a joinable thread

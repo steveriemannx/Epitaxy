@@ -5,7 +5,7 @@ because "safe" is meaningless without a threat model, and because Epitaxy is
 often compared to Rust — a comparison that only makes sense if the exact
 guarantee boundary is written down.
 
-**Epitaxy 0.7 is not Rust-certified.** It implements a Rust-style ownership and
+**Epitaxy 0.8 is not Rust-certified.** It implements a Rust-style ownership and
 borrow checker and a default-on checked runtime, but it compiles to C++20 and
 lets you call arbitrary C++ code. A Rust-style *unconditional* guarantee — "no
 undefined behaviour in safe code" — requires an execution model Epitaxy does not
@@ -68,6 +68,13 @@ So the honest statement is:
 > be `Send`, and `shared<T>` additionally requires `T: Sync`. Programs that use
 > `std::thread`, `std::async` or C++ libraries that start threads are outside
 > this check.
+>
+> Objects declared without an initializer are **value-initialized** (`T x{}`),
+> so reading them is defined behaviour (Rust rejects such reads at compile time
+> instead). Every runtime safety check that guards undefined behaviour
+> (bounds, null dereference, division/remainder by zero, `INT_MIN / -1`,
+> overflow, shifts) **aborts after reporting**: a custom contract handler cannot
+> resume into the unsafe operation.
 
 ## 3. What is checked where
 
@@ -128,20 +135,39 @@ Rules for keeping `unsafe` sound (documented, not machine-checked):
 These are the gaps relative to Rust. They are the reason this document says
 "conditional guarantee" rather than "memory safe" or "Rust-level".
 
-| Rust guarantee | Epitaxy 0.7 |
+| Rust guarantee | Epitaxy 0.8 |
 | --- | --- |
 | no UB in safe code | conditional: excluded C++/unsafe/`unchecked_*` surface only |
 | no data races | **checked only for `epi::spawn`**: arguments and captured values must be `Send`, `shared<T>` requires `Send + Sync`. Direct `std::thread`/`std::async` and C++ library threading are not tracked. |
 | full lifetimes / NLL | non-lexical borrow lifetimes with conservative lexical fallback for escaping/loop-crossing borrows; no lifetime generics; no interior mutability model |
 | no null | `nullptr` exists; runtime null checks instead |
-| no uninitialized reads | `out` parameters are plain references; data members may be default-initialised |
-| integer overflow never silent | strict mode checks arithmetic Epitaxy lowers; C++ library internals are not checked |
+| no uninitialized reads | declarations without an initializer are value-initialized (defined behaviour); `out` parameters must be assigned before use; Rust rejects uninitialized reads at compile time instead |
+| integer overflow never silent | strict mode checks all arithmetic Epitaxy lowers (including `INT_MIN / -1` and shifts) and aborts; C++ library internals are not checked |
 | panic = defined unwind | contract violations terminate; exceptions are C++ exceptions |
 | exhaustive matching | `inspect` requires a catch-all but does not check type-set completeness |
 
+### 5.1 Remaining sources of undefined behaviour
+
+Even in strict mode, the checked subset does not cover:
+
+* **C++ code that is called** — the standard library, third-party libraries and
+  your own C++ code are trusted to be UB-free; Epitaxy does not model their
+  internals (aliasing, iterator invalidation, thread internals, …);
+* **`unsafe` blocks/functions, `cpp1` blocks and raw pointers** — the explicit
+  escape hatches;
+* **`unchecked_*` operations** — explicit opt-outs;
+* **resource exhaustion** — stack overflow, out-of-memory, unbounded allocation;
+* **C++ library internals** — integer overflow inside a library, races in a
+  library that starts threads, etc.
+
+The strict subset eliminates UB that Epitaxy itself could introduce through the
+operations it lowers (arithmetic, indexing, dereference, division, shifts,
+uninitialized reads). Eliminating the remaining sources requires an owned
+execution model (see §8).
+
 ## 6. Comparison to Rust in one table
 
-| Mechanism | Rust | Epitaxy 0.7 |
+| Mechanism | Rust | Epitaxy 0.8 |
 | --- | --- | --- |
 | ownership + move | yes | yes (for Epitaxy code; conservative automatic last-use move) |
 | borrow checking | NLL, lifetimes, generics | NLL for non-escaping borrows, conservative otherwise; explicit borrow sources; no lifetime generics |
@@ -158,9 +184,10 @@ These are the gaps relative to Rust. They are the reason this document says
   arithmetic checked and prevents accidental raw C++.
 * Keep `unsafe` scopes at library boundaries; wrap C++ pointer APIs in small
   `unsafe` helpers with a documented contract.
-* Use `CXXFLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all"` in CI
-  and tests (`epitaxy --run` passes `CXXFLAGS` through) to catch C++-side
-  undefined behaviour that the checker cannot see.
+* Use `-fsanitize=address,undefined` in CI and tests to catch C++-side
+  undefined behaviour that the checker cannot see: `epitaxy --run --sanitize
+  file.ep`, `make sanitize`, or set `CXXFLAGS` yourself. This is a detection
+  layer, not a guarantee.
 * Prefer value types, `unique<T>`/`shared<T>` and borrows over raw pointers.
 * Create threads with `epi::spawn` (not raw `std::thread`), pass owned values
   (`unique<T>`/`shared<T>`), join or detach every `epi::thread`, and do not

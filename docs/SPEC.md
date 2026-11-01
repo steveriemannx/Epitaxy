@@ -1,6 +1,6 @@
 # The Epitaxy Language Specification
 
-**Version 0.7 (draft)**
+**Version 0.8 (draft)**
 
 This document defines the Epitaxy programming language: its source text, its
 grammar, and the meaning of its constructs. Epitaxy's surface syntax follows the
@@ -1099,6 +1099,13 @@ expression may not capture by reference.
 
 This checks only programs that use `epi::spawn`; direct `std::thread`/
 `std::async` use and C++ libraries that start threads are outside the analysis.
+
+Objects declared without an initializer are value-initialized (`T x{}`), so
+reading them is defined behaviour. Runtime checks that guard undefined
+behaviour abort after reporting, so a custom contract handler cannot resume
+into the unsafe operation. The remaining UB sources in strict mode are the
+explicit trust boundary (`unsafe`, `cpp1`, raw pointers, `unchecked_*`) and the
+C++ code that is called; see [`SAFETY.md`](SAFETY.md) §5.1.
 
 The following checks are on by default and can be disabled per translation unit
 with the CLI flags shown, or avoided at a specific operation with the

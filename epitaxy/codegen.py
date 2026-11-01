@@ -463,7 +463,7 @@ class CodeGen:
             return f"{prefix}auto {decl.name} = {self.initializer_code(decl.init)};"
         type_ = self.cpp_type(decl.type)
         if decl.init is None:
-            return f"{prefix}{type_} {decl.name};"
+            return f"{prefix}{type_} {decl.name}{{}};"
         if isinstance(decl.init, ast.InitList):
             return f"{prefix}{type_} {decl.name}{self.initializer_code(decl.init)};"
         return f"{prefix}{type_} {decl.name} = {decl.init and self.cxpr(decl.init)};"
@@ -739,7 +739,7 @@ class CodeGen:
             self.fail(f"data member '{member.name}' needs a type", member)
         type_ = self.cpp_type(member.type)
         if member.init is None:
-            self.emit(f"{type_} {member.name};")
+            self.emit(f"{type_} {member.name}{{}};")
         elif isinstance(member.init, ast.InitList):
             self.emit(f"{type_} {member.name}{self.initializer_code(member.init)};")
         else:
@@ -1968,7 +1968,7 @@ class CodeGen:
             return
         type_ = self.cpp_type(decl.type)
         if decl.init is None:
-            self.emit(f"{type_} {decl.name};")
+            self.emit(f"{type_} {decl.name}{{}};")
         elif isinstance(decl.init, ast.InitList):
             self.emit(f"{type_} {decl.name}{self.initializer_code(decl.init)};")
         else:
